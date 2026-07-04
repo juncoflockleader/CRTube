@@ -37,9 +37,24 @@ straight, finishing her third bowl of rice. Shirou watches, sleeves rolled.
 
 ### 3 · THE WAR (24s) — ***EMIYA.*** *Drums from the file itself.*
 Night city. Saber against a mountain of a man — Berserker, stone blade taller
-than she is. Clash after clash, gold sparks, knockback, charge again.
-Shirou shouting from the edge of the frame.
-> *Thirteen times she struck. The giant laughed. She struck again.*
+than she is. Clash after clash — every impact rings with layered metal — gold
+sparks, knockback, charge again. Then Shirou stops watching: he runs in, his
+circuits light up cyan, and a pale blade takes shape in his hands.
+> SHIROU: "Trace — on."
+Two hands on one hilt. The combined blow lands with a triple clang, and the
+giant comes apart into dark motes.
+> *One borrowed sword. Two hands on the hilt.*
+
+### 3.5 · THE KING OF HEROES (20s) — *EMIYA continues*
+The lakeside. Golden ripples open in the air behind a man in gold armor —
+the Gate, sword-tips easing out, gold raining on the water. He levels the
+drill-sword and the red storm fires.
+> GILGAMESH: "KNEEL, KING OF KNIGHTS." · "ENUMA ELISH."
+Saber plants herself. The sheath answers from inside her —
+> SABER: "AVALON."
+— a golden arc that parts the storm around her like a rock parts a river.
+When the wind dies she is already moving. One dash, one clang, and the King
+of Heroes is kneeling.
 
 ### 4 · EXCALIBUR (18s) — *EMIYA, peak*
 Ryuudou temple. Above it, the Grail — a black swirl eating the sky.
@@ -70,8 +85,9 @@ coat goes red, a shroud-tail trailing behind him in the wind.
 (In Avalon he is the auburn-haired boy again — that is what arriving means.)
 
 ### 8 · AVALON (hold) — *Pride, warm, far away*
-Green-gold grass to the horizon, wind moving through it in waves, one great
-tree. A woman in white waits beneath it, hair down. From the left edge of
+Green-gold grass to the horizon, wind moving through it in waves. One great
+tree with a swaying, sun-flecked crown — two more far off near the sky line.
+A woman in white waits beneath it, hair down. From the left edge of
 forever, a boy arrives — young again, because time means nothing here.
 She turns. He stops. Neither hurries now; they have literally forever.
 > SABER: "I told you. I would wait for you."

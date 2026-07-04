@@ -312,11 +312,17 @@ function syncSong(){ if(!ac)return; activeSong=null; }     // re-resolve on next
 function sfxChime(){ if(!ac)return; const t=ac.currentTime;
   voice(t,83,2.2,.06,{wave:'tri',echo:.8,sus:false,rel:.5});
   voice(t+.35,76,2,.05,{wave:'tri',echo:.8,sus:false,rel:.5}); }
-function sfxClang(){ if(!ac)return; const t=ac.currentTime;
-  noiseHit(t,.06,.09,'highpass',5200,2);
-  const o=ac.createOscillator(); o.setPeriodicWave(pw25);
-  o.frequency.setValueAtTime(2300,t); o.frequency.exponentialRampToValueAtTime(1500,t+.07);
-  const gn=env(t,.07,.03,.02,false); o.connect(gn); gn.connect(master); o.start(t); o.stop(t+.1);}
+function sfxClang(delay,soft){ if(!ac)return; const t=ac.currentTime+(delay||0), v=soft?.55:1;
+  noiseHit(t,.1*v,.13,'highpass',4600,2);
+  noiseHit(t,.05*v,.05,'bandpass',2400,3);
+  for(const [f0,d0,vv] of [[2600,0,.055],[1950,.012,.04],[3400,.028,.028],[1250,.02,.022]]){
+    const o=ac.createOscillator(); o.setPeriodicWave(pw25);
+    o.frequency.setValueAtTime(f0,t+d0);
+    o.frequency.exponentialRampToValueAtTime(f0*.6,t+d0+.14);
+    const gn=env(t+d0,.16,vv*v,.08,false); o.connect(gn); gn.connect(master);
+    o.start(t+d0); o.stop(t+d0+.3);
+  }
+}
 function sfxBeam(){ if(!ac)return; const t=ac.currentTime;
   noiseHit(t,.05,1.6,'bandpass',900,.7);
   const o=ac.createOscillator(); o.type='sine';
@@ -402,17 +408,61 @@ function drawShirou(x,y,t,pose,arch){
   R(x-3,y-26+hunch,8,6,hair); R(x-4,y-23+hunch,2,3,hair);
   R(x+2,y-23+hunch,3,3,mix(C.skin,'#b88a68',arch*.6));
 }
-function drawBerserker(x,y,t){
-  x|=0;y|=0; const br=(Math.sin(t*2)*1)|0;
-  R(x-9,y-26,7,26,C.stone2); R(x+3,y-26,7,26,C.stone);        // legs
-  R(x-13,y-52+br,27,28,C.stone);                              // torso
-  R(x-16,y-46+br,5,16,C.stone2); R(x+12,y-48+br,6,18,C.stone2); // arms
-  R(x-7,y-60+br,15,10,C.stone2);                              // head
-  R(x-4,y-57+br,3,2,'#b8bcc9'); R(x+2,y-57+br,3,2,'#b8bcc9'); // pale eyes
-  R(x-10,y-64+br,20,5,'#2a2a32');                             // wild hair
-  // the stone blade
+function drawBerserker(x,y,t,skip){
+  x|=0;y|=0; const br=(Math.sin(t*2)*1)|0, S=skip||(()=>false);
+  const px=(a,b,w,h,col)=>{ if(!S())R(x+a,y+b,w,h,col); };
+  px(-9,-26,7,26,C.stone2); px(3,-26,7,26,C.stone);           // legs
+  px(-13,-52+br,27,28,C.stone);                               // torso
+  px(-16,-46+br,5,16,C.stone2); px(12,-48+br,6,18,C.stone2);  // arms
+  px(-7,-60+br,15,10,C.stone2);                               // head
+  px(-4,-57+br,3,2,'#b8bcc9'); px(2,-57+br,3,2,'#b8bcc9');    // pale eyes
+  px(-10,-64+br,20,5,'#2a2a32');                              // wild hair
   g.fillStyle='#4a4a55';
-  for(let k=0;k<34;k++)g.fillRect(x+16+(k>>2),y-30-k+br,5-(k>>4),1);
+  for(let k=0;k<34;k++)if(!S())g.fillRect(x+16+(k>>2),y-30-k+br,5-(k>>4),1);
+}
+
+function drawGil(x,y,t,kneel){
+  x|=0;y|=0;
+  if(kneel){
+    R(x-4,y-2,10,2,'#b89028');                              // knee down
+    R(x-2,y-8,7,6,'#d8b040'); R(x-2,y-7,7,2,'#f0d060');
+    R(x-2,y-14,8,6,'#e8d080'); R(x,y-16,5,2,'#e8d080');
+    R(x+3,y-12,3,3,C.skin);
+    return;
+  }
+  R(x-1,y-12,3,6,'#b89028'); R(x+2,y-12,3,6,'#d8b040');     // greaves
+  R(x-4,y-15,10,4,'#b89028');
+  R(x-3,y-22,8,7,'#d8b040'); R(x-3,y-20,8,2,'#f0d060');     // cuirass
+  R(x+4,y-21,2,6,'#d8b040');
+  R(x-3,y-28,8,6,'#e8d080'); R(x-1,y-30,5,2,'#e8d080');     // blond spikes
+  R(x,y-31,1,2,'#e8d080'); R(x+3,y-31,1,2,'#e8d080');
+  R(x+2,y-26,3,3,C.skin); R(x+3,y-25,1,1,'#c22e3a');        // red eye
+}
+function disc(cx,cy,r,col){ g.fillStyle=col; cx|=0; cy|=0;
+  for(let dy=-r;dy<=r;dy++){const w=Math.sqrt(r*r-dy*dy)|0;
+    g.fillRect(cx-w,(cy+dy)|0,w*2+1,1);} }
+function drawTree(x,y,s,t){                                  // a real tree, not a rectangle
+  x|=0;y|=0;
+  const sway=Math.sin(t*.7+x)*s*1.5;
+  R(x-3*s,y-26*s,6*s,26*s,'#4a3a28');                        // trunk
+  R(x-2*s,y-26*s,2*s,24*s,'#5a4832');                        // lit side
+  R(x-5*s,y-3*s,10*s,3*s,'#3d3020');                         // root flare
+  g.fillStyle='#4a3a28';                                     // two limbs
+  for(let k=0;k<9*s;k++){g.fillRect(x+2*s+k,(y-26*s-k*.7)|0,2,2);
+    g.fillRect(x-2*s-k,(y-24*s-k*.9)|0,2,2);}
+  const cx=x+sway;                                           // canopy: clumped discs
+  disc(cx,y-38*s,13*s,'#548436');
+  disc(cx-11*s,y-33*s,9*s,'#4d7c31');
+  disc(cx+11*s,y-34*s,10*s,'#5c8a3c');
+  disc(cx-4*s,y-45*s,9*s,'#68984a');
+  disc(cx+6*s,y-43*s,8*s,'#5c8a3c');
+  disc(cx-9*s,y-41*s,6*s,'#71a251');
+  disc(cx+3*s,y-49*s,5*s,'#71a251');
+  g.fillStyle='rgba(216,200,120,.5)';                        // sun through the leaves
+  for(let i=0;i<30*s;i++){const a=(i*47)*.01745,d2=(i*29)%(13*s|0);
+    g.fillRect(cx+Math.cos(a)*d2|0,(y-40*s+Math.sin(a)*d2*.8)|0,2,1);}
+  g.fillStyle='rgba(38,58,28,.5)';                           // shade under the crown
+  for(let i=0;i<16*s;i++)g.fillRect(cx-10*s+((i*23)%(20*s|0)),(y-31*s+(i*13)%(6*s|0))|0,3,1);
 }
 
 /* ================= SCENES ================= */
@@ -517,36 +567,160 @@ const SCN=[
       g.fillStyle='#0a0d1a';
     }
     R(0,120,W,6,'#1a1d2c'); bands(['#12141f','#0e101a','#0b0d16'],126,H);
-    // duel: approach - clash - knockback
-    const cycle=(st%3.2)/3.2;
-    let sx=S_.sx, bx=S_.bx;
-    if(cycle<.4){ sx=120+cycle/.4*54; }
-    else if(cycle<.5){ sx=174; if(!S_.clanged){S_.clanged=true;sfxClang();S_.shake=3;
-      for(let k=0;k<12;k++)S_.sparks.push({x:186,y:138,vx:(Math.random()-.4)*90,
-        vy:-Math.random()*70,l:.5});} }
-    else { sx=174-(cycle-.5)/.5*54; S_.clanged=false; }
+    // phase 1 (st<14): saber alone — approach, clash (double clang), knockback
+    const duel=st<14, cycle=(st%3.2)/3.2;
+    let sx=120;
+    if(duel){
+      if(cycle<.4){ sx=120+cycle/.4*54; }
+      else if(cycle<.5){ sx=174;
+        if(!S_.clanged){ S_.clanged=true; sfxClang(); sfxClang(.13,true); S_.shake=3;
+          for(let k=0;k<12;k++)S_.sparks.push({x:186,y:138,vx:(Math.random()-.4)*90,
+            vy:-Math.random()*70,l:.5,c:C.gold2});} }
+      else { sx=174-(cycle-.5)/.5*54; S_.clanged=false; }
+    }
     S_.shake=Math.max(0,S_.shake-dt*12);
-    const shx=(Math.random()-.5)*S_.shake|0, shy=(Math.random()-.5)*S_.shake|0;
-    g.translate(shx,shy);
-    drawBerserker(266,168,st);
-    drawSaber(sx|0,168,st,cycle<.5?'walk':'stance');
+    const shkx=(Math.random()-.5)*S_.shake|0, shky=(Math.random()-.5)*S_.shake|0;
+    g.translate(shkx,shky);
+    // berserker: takes the combined blow at 18, comes apart after
+    const bdis=clamp((st-18)/4.5,0,1);
+    if(bdis<1){
+      drawBerserker(266,168,st,bdis>0?()=>Math.random()<bdis:null);
+      if(bdis>0)for(let k=0;k<2;k++)S_.sparks.push({x:246+Math.random()*40,
+        y:106+Math.random()*60,vx:(Math.random()-.5)*12,vy:-16-Math.random()*26,
+        l:.9,c:'#3a3a4a'});
+    }
+    if(duel){
+      drawSaber(sx|0,168,st,cycle<.5?'walk':'stance');
+      drawShirou(38,168,st,'stand');
+    }else{
+      // phase 2: shirou runs in, traces a blade, they strike together
+      const p1=clamp((st-14)/2,0,1), p2=clamp((st-16)/2,0,1);
+      const lunge=st>=18?8:0;
+      const sax=(150+p2*58+lunge)|0, shx2=(38+p1*92+p2*54+lunge)|0;
+      drawSaber(sax,168,st,(p2>0&&p2<1)?'walk':'stance');
+      drawShirou(shx2,168,st,(p1<1||(p2>0&&p2<1))?'walk':'stand');
+      const tr=clamp((st-14.5)/1.5,0,1);
+      if(tr<1&&st>14.5){ g.fillStyle='rgba(90,200,230,.7)';   // circuits lighting up
+        for(let k=0;k<5;k++)if((k+((st*8)|0))%2)g.fillRect(shx2-2+k*2,150+(k%3),1,2);}
+      if(st>14.5){                                            // the projected sword
+        g.fillStyle='#d8dce4';
+        const bl=(tr*12)|0;
+        for(let k=0;k<bl;k++)g.fillRect(shx2+6+k,150-(k>>1),1,2);
+        if(bl>3){g.fillStyle=C.gold2;g.fillRect(shx2+5,150,2,3);}
+      }
+      if(st>=18&&!S_.struck){ S_.struck=true;                 // the blow lands
+        sfxClang(); sfxClang(.12); sfxClang(.26,true); S_.shake=4;
+        for(let k=0;k<24;k++)S_.sparks.push({x:252,y:136,vx:(Math.random()-.3)*110,
+          vy:-Math.random()*90,l:.6,c:C.gold2});
+      }
+    }
     g.setTransform(1,0,0,1,0,0);
-    // sparks
+    // sparks / motes
+    for(const p of S_.sparks){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=(p.c===C.gold2?160:8)*dt; p.l-=dt;
+      if(p.l>0){g.fillStyle=p.c;g.globalAlpha=clamp(p.l*2,0,1);
+        g.fillRect(p.x|0,p.y|0,1,1);} }
+    g.globalAlpha=1;
+    S_.sparks=S_.sparks.filter(p=>p.l>0);
+    caption([
+      [2,5.5,"THE FOURTH NIGHT: BERSERKER."],
+      [6,9.5,"THIRTEEN TIMES SHE STRUCK. THE GIANT LAUGHED."],
+      [10,12.5,'"SABER!!"','SHIROU'],
+      [14.5,17,'"TRACE - ON."','SHIROU'],
+      [18.5,22.5,"ONE BORROWED SWORD. TWO HANDS ON THE HILT."],
+    ],st);
+  }},
+/* ---- 4 THE KING OF HEROES ---- */
+{ name:'gil', dur:20, sec:'war',
+  init(){ setWind(.012); S_.sparks=[]; S_.shake=0; S_.struck=false; S_.beamSfx=false; },
+  draw(st,dt){
+    // lakeside night
+    bands(['#0d1020','#0f1226','#12152c','#141830'],0,110);
+    drawStars(st,.6);
+    R(40,20,14,14,C.moon); R(43,17,8,20,C.moon); R(37,23,20,8,C.moon);
+    bands(['#101a2c','#0d1626','#0b1220'],110,150);          // the lake
+    for(let i=0;i<22;i++){const wx=(i*31+st*10)%W;
+      g.fillStyle='rgba(200,210,225,.1)';g.fillRect(wx|0,114+(i%6)*6,6,1);}
+    bands(['#0e0d18','#0b0a13'],150,H);                      // near bank
+    // the gate of babylon: gold ripples opening behind him
+    const gates=Math.min(5,(st/0.9)|0);
+    for(let k=0;k<gates;k++){
+      const gxp=250+((k*53)%110), gyp=36+((k*37)%52);
+      const puls=.5+.2*Math.sin(st*1.3+k*2);
+      ring(gxp,gyp,10+(k%3)*3,.6,`rgba(216,176,64,${puls})`);
+      ring(gxp,gyp,7+(k%3)*2,.6,`rgba(240,208,96,${puls*.7})`);
+      g.fillStyle=`rgba(216,220,228,${puls})`;               // sword tips easing out
+      for(let j=0;j<5;j++)g.fillRect(gxp-1,gyp-2+j,2,1);
+    }
+    // gold rain on the water below the gates
+    if(gates>2)for(let k=0;k<6;k++){
+      const rx=250+((k*47+st*20)%110)|0, ry=(110+((st*40+k*31)%38))|0;
+      g.fillStyle='rgba(216,176,64,.3)'; g.fillRect(rx,ry,1,3);
+    }
+    S_.shake=Math.max(0,S_.shake-dt*12);
+    g.translate((Math.random()-.5)*S_.shake|0,(Math.random()-.5)*S_.shake|0);
+    // ea: red spiral gathering, then the beam
+    const chg=clamp((st-6)/2.5,0,1), firing=st>8.5&&st<13.2;
+    const beamRamp=clamp((st-8.5)/.8,0,1)*clamp((13.2-st)/1,0,1);
+    if(st>6&&st<8.5){                                        // charge: motes spiral inward
+      const rr=mulberry((st*6|0)+1);
+      for(let k=0;k<16*chg;k++){const a=rr()*6.28,d2=6+rr()*22*(1-chg*.6);
+        g.fillStyle='rgba(194,58,74,.7)';
+        g.fillRect(288+Math.cos(a)*d2|0,148+Math.sin(a)*d2*.5|0,1,1);}
+    }
+    if(firing){
+      if(!S_.beamSfx){S_.beamSfx=true;sfxBeam();}
+      const bw=(2+beamRamp*5)|0;
+      for(let x2=150;x2<284;x2+=2){                          // the drill wind
+        const ph2=st*12+x2*.11;
+        const yy=146+Math.sin(ph2)*3*beamRamp;
+        g.fillStyle=`rgba(194,58,74,${.5*beamRamp})`; g.fillRect(x2,yy|0,2,bw);
+        g.fillStyle=`rgba(90,26,40,${.5*beamRamp})`; g.fillRect(x2,(yy+bw)|0,2,2);
+        if((x2&6)===0){g.fillStyle=`rgba(240,160,150,${.4*beamRamp})`;
+          g.fillRect(x2,(yy+1)|0,1,2);}
+      }
+      // avalon: the golden sheath takes it, splits it around her
+      for(let k=0;k<10;k++){                                 // barrier arc
+        const th=-1.3+k/9*2.6;
+        g.fillStyle=`rgba(240,216,136,${.7*beamRamp})`;
+        g.fillRect(148+Math.cos(th)*10|0,146+Math.sin(th)*13|0,2,2);
+        g.fillStyle=`rgba(240,216,136,${.35*beamRamp})`;
+        g.fillRect(150+Math.cos(th)*6|0,146+Math.sin(th)*9|0,2,2);
+      }
+      for(let k=0;k<14;k++){                                 // split streams past her
+        g.fillStyle=`rgba(194,58,74,${.35*beamRamp*(1-k/16)})`;
+        g.fillRect(146-k*6,138-k*2,5,2); g.fillRect(146-k*6,156+k*2,5,2);
+      }
+      R(0,0,W,H,`rgba(194,58,74,${.07*beamRamp})`);
+    }
+    // saber: braced behind avalon, then the counter-dash
+    const dash=clamp((st-14)/2,0,1);
+    const sax=(132+dash*132)|0;
+    drawSaber(sax,168,st,dash>0&&dash<1?'walk':'stance');
+    if(dash>0&&dash<1){ g.fillStyle='rgba(205,198,180,.25)'; // speed lines
+      for(let k=0;k<6;k++)g.fillRect(sax-14-k*9,140+(k%4)*8,10,1);}
+    if(st>=16&&!S_.struck){ S_.struck=true;
+      sfxClang(); sfxClang(.14); S_.shake=4;
+      for(let k=0;k<20;k++)S_.sparks.push({x:284,y:146,vx:(Math.random()-.4)*100,
+        vy:-Math.random()*80,l:.6});
+    }
+    // gilgamesh: gold, unimpressed, then not
+    const hit=st>=16;
+    drawGil(292,hit?172:168,st,hit);
+    g.setTransform(1,0,0,1,0,0);
     for(const p of S_.sparks){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=160*dt; p.l-=dt;
       if(p.l>0){g.fillStyle=C.gold2;g.globalAlpha=clamp(p.l*2,0,1);
         g.fillRect(p.x|0,p.y|0,1,1);} }
     g.globalAlpha=1;
     S_.sparks=S_.sparks.filter(p=>p.l>0);
-    // shirou at the edge
-    drawShirou(38,168,st,'stand');
     caption([
-      [2,6,"THE FOURTH NIGHT: BERSERKER."],
-      [8,12.5,"THIRTEEN TIMES SHE STRUCK. THE GIANT LAUGHED."],
-      [13,16,"SHE STRUCK AGAIN."],
-      [18,22,'"SABER!!"','SHIROU'],
+      [1.5,5,"THE LAST ENEMY WAS DRESSED IN GOLD."],
+      [5.5,8,'"KNEEL, KING OF KNIGHTS."','GILGAMESH'],
+      [8.5,11,'"ENUMA ELISH."','GILGAMESH'],
+      [11.5,13.5,'"AVALON."','SABER'],
+      [16.5,19.5,"THE SHEATH THAT HID HER ALL ALONG. HIS STORM, PARTED."],
     ],st);
   }},
-/* ---- 4 EXCALIBUR ---- */
+/* ---- 5 EXCALIBUR ---- */
 { name:'holy', dur:18, sec:'holy',
   init(){ setWind(.015); S_.beamed=false; S_.grail=[]; const r=mulberry(31);
     for(let i=0;i<90;i++)S_.grail.push({a:r()*6.28,r2:6+r()*26,sp:.2+r()*.5,alive:true}); },
@@ -734,12 +908,10 @@ const SCN=[
       g.fillStyle=wv>.3?'rgba(216,200,120,.5)':'rgba(90,130,60,.5)';
       g.fillRect(gx2+((wv*2)|0),gy,2,1);
     }
-    // the tree
-    R(296,60,10,70,'#4a3a28'); R(290,120,22,8,'#3d3020');
-    g.fillStyle='#5c8a3c';
-    R(266,34,70,34,'#5c8a3c'); R(276,24,50,16,'#68984a'); R(258,50,86,22,'#548436');
-    g.fillStyle='rgba(216,200,120,.5)';
-    for(let i=0;i<30;i++)g.fillRect(262+(i*17)%76,28+(i*13)%40,2,1);
+    // trees — one great, two far
+    drawTree(92,110,.45,st+2);
+    drawTree(172,104,.34,st+4);
+    drawTree(300,134,1.5,st);
     // light motes
     for(const m of S_.motes){
       m.y-=m.v*dt*.4; m.x+=Math.sin(st*.5+m.p)*dt*6;
