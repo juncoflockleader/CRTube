@@ -226,6 +226,22 @@
       </div>
     </a>
 
+    <a class="card" href="watch-hd.html">
+      <div class="thumb">
+        <canvas id="th6" width="192" height="108"></canvas>
+        <span class="live">PIXEL &middot; HI-BIT</span>
+        <span class="dur">5:30</span>
+      </div>
+      <div class="meta">
+        <div class="av"><canvas id="av6" width="14" height="14"></canvas></div>
+        <div>
+          <h3>NieR:Automata &mdash; HI-BIT | Route A + Ending E (Piano Collections)</h3>
+          <div class="sub">Pod 042 <span class="check">&#10004;</span></div>
+          <div class="sub"><span id="views6">1 view</span> &middot; 11,945 years from now</div>
+        </div>
+      </div>
+    </a>
+
     <div class="card skel"><div class="thumb"></div>
       <div class="meta"><div class="av"></div>
         <div style="flex:1"><div class="bar b1"></div><div class="bar b2"></div></div></div></div>
@@ -423,6 +439,47 @@
   gx.fillStyle='rgba(0,0,0,.25)';gx.fillRect(0,0,W,3);gx.fillRect(0,H-3,W,3);
 })();
 
+/* ---- HD Route A thumbnail: the ruins walk, hi-bit ---- */
+(function(){
+  const c=document.getElementById('th6'),gx=c.getContext('2d');
+  const W=192,H=108;
+  const sky=['#8f8a7c','#9a927e','#a49a82','#ada087','#b5a68a'];
+  for(let i=0;i<5;i++){gx.fillStyle=sky[i];gx.fillRect(0,i*16,W,16);}
+  for(let i=0;i<4;i++){ gx.fillStyle=sky[i+1];       // dither transitions
+    for(let r=0;r<3;r++)for(let x=(r&1)*2;x<W;x+=4)gx.fillRect(x,(i+1)*16-2+r,2,1);}
+  gx.fillStyle='#e4dfcc';
+  gx.fillRect(154,12,10,10);gx.fillRect(156,10,6,14);gx.fillRect(152,14,14,6);
+  let s=7;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647;};
+  gx.fillStyle='#7c766a';
+  for(let x=0;x<W;){const w=8+rnd()*14|0,h=12+rnd()*30|0;gx.fillRect(x,74-h,w,h);x+=w+(2+rnd()*7|0);}
+  gx.fillStyle='#6e675c';gx.fillRect(0,72,W,10);
+  for(let x=-2;x<W;){const w=12+rnd()*16|0,h=22+rnd()*36|0;
+    gx.fillStyle='#4e4a44';gx.fillRect(x,88-h,w,h);
+    if(rnd()<.6){gx.fillStyle='#6b6f4e';gx.fillRect(x,86-h,w,3);}
+    gx.fillStyle='#15130f';
+    for(let wy=92-h;wy<80;wy+=6)for(let wx=x+2;wx<x+w-2;wx+=5)
+      if(rnd()<.5)gx.fillRect(wx,wy,2,3);
+    x+=w+(1+rnd()*8|0);}
+  gx.fillStyle='#4e483f';gx.fillRect(0,88,W,20);
+  gx.fillStyle='#38332c';for(let i=0;i<20;i++)gx.fillRect((i*31)%W,87+(i%3),6,3);
+  // 2B larger, mid-stride
+  const x0=88,y0=88;
+  gx.fillStyle='#e8c8a8';gx.fillRect(x0-1,y0-10,3,5);
+  gx.fillStyle='#17151a';gx.fillRect(x0+2,y0-10,3,5);gx.fillRect(x0-2,y0-5,3,5);gx.fillRect(x0+3,y0-5,3,5);
+  gx.fillStyle='#17151a';gx.fillRect(x0-4,y0-14,11,5);
+  gx.fillStyle='#efeade';gx.fillRect(x0-3,y0-10,9,1);
+  gx.fillStyle='#17151a';gx.fillRect(x0-2,y0-19,7,5);
+  gx.fillStyle='#8a90a0';for(let k=0;k<7;k++)gx.fillRect(x0-5+(k>>1),y0-24+k,1,1);
+  gx.fillStyle='#e9e3d3';gx.fillRect(x0-3,y0-25,9,6);
+  gx.fillStyle='#f7f4ea';gx.fillRect(x0-2,y0-26,7,1);
+  gx.fillStyle='#17151a';gx.fillRect(x0-2,y0-24,7,1);gx.fillRect(x0,y0-22,5,2);
+  gx.fillStyle='#e8c8a8';gx.fillRect(x0+3,y0-20,3,2);
+  // pod
+  gx.fillStyle='#8a857a';gx.fillRect(x0-20,y0-30,8,4);
+  gx.fillStyle='#54504c';gx.fillRect(x0-20,y0-26,8,2);
+  gx.fillStyle='rgba(0,0,0,.25)';gx.fillRect(0,0,W,3);gx.fillRect(0,H-3,W,3);
+})();
+
 /* ---- pod avatars ---- */
 function pod(id,body,dark){
   const g=document.getElementById(id).getContext('2d');
@@ -432,6 +489,7 @@ function pod(id,body,dark){
 }
 pod('av0','#8a857a','#54504c');
 pod('av1','#8a857a','#54504c');
+pod('av6','#8a857a','#54504c');
 /* command seal avatar */
 (function(){
   const gx=document.getElementById('av5').getContext('2d');
@@ -469,7 +527,7 @@ pod('av1','#8a857a','#54504c');
 document.getElementById('sform').addEventListener('submit',e=>{
   e.preventDefault();
   const b=document.getElementById('sbox');
-  b.value='';b.placeholder='no results. this world has five videos.';
+  b.value='';b.placeholder='no results. this world has six videos.';
 });
 try{
   const n=+localStorage.getItem('nier16_views')||1;
@@ -482,6 +540,8 @@ try{
   document.getElementById('views4').textContent=p+(p===1?' view':' views');
   const f=+localStorage.getItem('fate16_views')||1;
   document.getElementById('views5').textContent=f+(f===1?' view':' views');
+  const h=+localStorage.getItem('hd16_views')||1;
+  document.getElementById('views6').textContent=h+(h===1?' view':' views');
 }catch(e){}
 </script>
 </body>

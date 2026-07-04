@@ -19,6 +19,12 @@ A tiny fake video site hosting pixel-art tribute films, rendered live on a
   The summoning, Berserker, Excalibur, a farewell — and the Last Episode: Avalon.
   First film with two soundtracks: the engine switches MIDIs between battle and
   separation scenes, and plays the battle file's own channel-9 percussion.
+- **NieR:Automata — HI-BIT · Route A + Ending E** ([watch-hd.html](watch-hd.html), script in [SCRIPT-HD.md](SCRIPT-HD.md))
+  The big one: 480×270, dithered gradients, multi-tone sprites. The full Route A —
+  factory, bunker, city ruins, desert, amusement park, Pascal, the Goliath invasion,
+  flooded city, forest kingdom, copied city, Eve — then the Ending E credits
+  bullet-hell, at roughly five and a half minutes. Stage and boss order follows
+  the published walkthroughs.
 
 ## How it works
 
