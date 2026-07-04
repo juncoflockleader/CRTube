@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2B — 256-BIT test</title>
+<style>
+  html,body{margin:0;height:100%;background:#0d0c10;display:flex;
+    flex-direction:column;align-items:center;justify-content:center;gap:14px}
+  canvas{height:min(78vh,640px);image-rendering:pixelated;
+    box-shadow:0 0 0 1px #26242e, 0 24px 60px rgba(0,0,0,.6)}
+  p{color:#6a6577;font:12px ui-monospace,Menlo,monospace;letter-spacing:.08em}
+  a{color:#8a93a5}
+</style>
+</head>
+<body>
+<canvas id="cv" width="96" height="128"></canvas>
+<p>2B &middot; 96&times;128 &middot; QUANTIZED + DITHERED &middot; "256-BIT" &middot; <a href="index.html">&larr; CRTube</a></p>
+<script>
+'use strict';
+const FW=96,FH=128;
+const cv=document.getElementById('cv'), g=cv.getContext('2d');
+
+/* ---------- palette (hand-built ramps) ---------- */
+const PAL=[
+  // hair: warm platinum ramp
+  '#f7f4ea','#eae5d6','#d8d2c0','#c2bcaa','#a8a292','#8d887a','#726d61','#57534a',
+  // skin
+  '#f0dbc4','#e3c3a8','#d0a98d','#b98f76','#9c7260',
+  // blush / lips
+  '#dba08c','#c27a70','#a05a58','#7c4544',
+  // blacks (outfit, blindfold)
+  '#0d0c10','#17151c','#221f28','#2e2b36','#3c3845','#4c4856',
+  // white trim
+  '#e9e5da','#bfbbae',
+  // outline
+  '#100e14',
+].map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+
+const BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+
+/* ---------- figure layer (drawn smooth, then crunched) ---------- */
+const fig=document.createElement('canvas'); fig.width=FW; fig.height=FH;
+const f=fig.getContext('2d');
+
+function P(cmds,col,alpha){
+  f.fillStyle=col; f.globalAlpha=alpha==null?1:alpha;
+  f.beginPath();
+  for(const c of cmds){
+    if(c[0]==='M')f.moveTo(c[1],c[2]);
+    else if(c[0]==='B')f.bezierCurveTo(c[1],c[2],c[3],c[4],c[5],c[6]);
+    else if(c[0]==='Q')f.quadraticCurveTo(c[1],c[2],c[3],c[4]);
+    else if(c[0]==='L')f.lineTo(c[1],c[2]);
+  }
+  f.closePath(); f.fill(); f.globalAlpha=1;
+}
+function E(cx,cy,rx,ry,col,alpha){
+  f.fillStyle=col; f.globalAlpha=alpha==null?1:alpha;
+  f.beginPath(); f.ellipse(cx,cy,rx,ry,0,0,7); f.fill(); f.globalAlpha=1;
+}
+
+function drawFigure(){
+  f.clearRect(0,0,FW,FH);
+
+  /* ----- back hair: full bob silhouette, shadow tone ----- */
+  P([['M',22,48],['B',14,24,30,5,48,5],['B',66,5,82,24,74,48],
+     ['B',80,58,76,70,68,76],['B',63,81,56,78,54,73],
+     ['L',42,73],['B',40,79,33,82,27,77],['B',19,70,17,58,22,48]],'#8d887a');
+  // deeper shadow pockets behind the face
+  E(31,56,7,16,'#726d61',.65); E(66,57,7,16,'#726d61',.65);
+  E(48,68,16,10,'#726d61',.5);
+
+  /* ----- neck ----- */
+  P([['M',42,74],['L',42,92],['L',54,92],['L',54,74]],'#d0a98d');
+  P([['M',42,74],['L',42,82],['L',54,82],['L',54,74]],'#b98f76');   // jaw shadow
+
+  /* ----- face ----- */
+  P([['M',34,40],['B',34,58,36,70,42,78],['B',45,81.6,51,81.6,54,78],
+     ['B',60,70,62,58,62,40],['L',34,40]],'#f0dbc4');
+  // side + under-blindfold shading
+  P([['M',56,42],['B',60,56,59,68,53,77],['B',58,72,61,60,62,44],['L',62,40],['L',56,40]],'#e3c3a8');
+  P([['M',34,50],['L',62,50],['L',62,55],['B',52,58,42,58,34,55]],'#e3c3a8',.55);
+  // cheeks
+  E(39.5,60,3.4,2,'#dba08c',.35); E(56.5,60,3.4,2,'#dba08c',.35);
+  // nose: tiny shadow + tip
+  P([['M',47,58],['L',46,64],['L',48.5,65],['L',48.5,58]],'#d0a98d',.8);
+  E(47.6,65.4,1.5,.9,'#c98f74',.9);
+  // lips
+  P([['M',43.5,70],['Q',46,68.8,48,69.6],['Q',50,68.8,52.5,70],
+     ['Q',48,71.6,43.5,70]],'#c27a70');
+  P([['M',44,70.6],['Q',48,73.6,52,70.6],['Q',48,72,44,70.6]],'#dba08c');
+  P([['M',44,70.2],['L',52,70.2],['L',51,70.9],['L',45,70.9]],'#a05a58',.85);
+  // the mole
+  f.fillStyle='#9c7260'; f.fillRect(42,74,1,1);
+  // chin crease
+  E(48,77.4,2.4,.8,'#d0a98d',.5);
+
+  /* ----- blindfold ----- */
+  P([['M',31,42],['B',40,39.4,56,39.4,65,42],['L',65,52],
+     ['B',56,54.8,40,54.8,31,52]],'#17151c');
+  P([['M',31,42],['B',40,39.4,56,39.4,65,42],['L',65,44.2],
+     ['B',56,41.8,40,41.8,31,44.2]],'#3c3845');                    // top sheen
+  P([['M',36,50.5],['L',60,50.5],['L',60,52],['B',52,54,44,54,36,52]],'#0d0c10',.8);
+  // seam glints
+  f.fillStyle='#4c4856'; f.fillRect(38,46,5,1); f.fillRect(52,45,6,1);
+
+  /* ----- crown above the hairband ----- */
+  E(48,12,20,6.5,'#d8d2c0'); E(48,10,13,4,'#eae5d6');
+
+  /* ----- fringe: solid mass with a soft feathered hem ----- */
+  P([['M',27,34],['B',26,20,34,14,48,14],['B',62,14,70,20,69,34],
+     ['L',66,38],['L',63,47],['L',59,42.5],['L',55,48],['L',50,43],['L',46,48.5],
+     ['L',41,43],['L',37,47.5],['L',33,42.5],['L',30,38],['L',27,34]],'#d8d2c0');
+  // mid-tone sweeps
+  P([['M',34,20],['B',40,15,46,16,47,22],['Q',45,34,41,46],['Q',36,34,34,20]],'#eae5d6');
+  P([['M',62,22],['B',58,15,52,15,50,21],['Q',52,33,56,46],['Q',61,34,62,22]],'#eae5d6');
+  // bright top-lit strands
+  P([['M',42,17],['Q',45,15,46,18],['Q',44,30,43,42],['Q',40,28,42,17]],'#f7f4ea');
+  P([['M',55,18],['Q',52,15,51,18],['Q',52,30,54,44],['Q',57,30,55,18]],'#f7f4ea');
+  // shaded parting between locks
+  P([['M',48,26],['Q',49,38,48,48],['Q',46,38,47,26]],'#c2bcaa');
+  P([['M',37,26],['Q',37,36,36,42],['Q',35,34,36,26]],'#c2bcaa');
+  P([['M',60,27],['Q',61,36,61,43],['Q',59,35,59,27]],'#c2bcaa');
+
+  /* ----- the black hairband, tucked into the sides ----- */
+  P([['M',26,27],['B',35,15,61,15,70,27],['L',67,33],['B',59,21,37,21,29,33]],'#17151c');
+  P([['M',27,26.2],['B',36,15.6,60,15.6,69,26.2],['L',68,28],
+     ['B',59,18,37,18,28,28]],'#3c3845');
+
+  /* ----- side curtains framing the face ----- */
+  P([['M',25,32],['B',21,44,22,60,28,72],['B',31,66,32,54,31,42],
+     ['B',30,36,28,32,25,32]],'#d8d2c0');
+  P([['M',71,32],['B',75,44,74,60,68,74],['B',65,68,64,54,65,42],
+     ['B',66,36,68,32,71,32]],'#c2bcaa');
+
+  /* ----- collar + shoulders ----- */
+  P([['M',8,128],['L',11,110],['B',16,99,32,93,40,91],['L',41,84],
+     ['L',55,84],['L',56,91],['B',64,93,80,99,85,110],['L',88,128]],'#17151c');
+  // collar front piece
+  P([['M',40,84],['L',56,84],['L',57,97],['L',39,97]],'#0d0c10');
+  f.fillStyle='#e9e5da'; f.fillRect(40,84,16,1);                    // white trim
+  f.fillStyle='#bfbbae'; f.fillRect(40,86,16,1);
+  f.fillStyle='#2e2b36'; f.fillRect(47,87,2,10);                    // zip
+  f.fillStyle='#e9e5da'; f.fillRect(46,98,4,3);                     // clasp
+  // shoulder sheen
+  P([['M',13,109],['B',18,100,32,94,40,92],['L',40,95],['B',33,97,20,102,15,110]],'#2e2b36');
+  P([['M',83,109],['B',78,100,64,94,56,92],['L',56,95],['B',63,97,76,102,81,110]],'#2e2b36');
+  // puffed sleeve hints
+  E(14,120,7,9,'#221f28'); E(82,120,7,9,'#221f28');
+  E(12,117,4,5,'#2e2b36'); E(84,117,4,5,'#2e2b36');
+}
+
+/* ---------- crunch: quantize + bayer dither + outline ---------- */
+function crunch(){
+  const img=f.getImageData(0,0,FW,FH), d=img.data;
+  for(let y=0;y<FH;y++)for(let x=0;x<FW;x++){
+    const i=(y*FW+x)*4;
+    if(d[i+3]<110){d[i+3]=0;continue;}
+    const th=(BAYER[y&3][x&3]/16-.5)*12;
+    const r=d[i]+th, gg=d[i+1]+th, b=d[i+2]+th;
+    let best=0,bd=1e9;
+    for(let p=0;p<PAL.length;p++){
+      const dr=r-PAL[p][0],dg=gg-PAL[p][1],db=b-PAL[p][2];
+      const dist=dr*dr*2+dg*dg*3+db*db;
+      if(dist<bd){bd=dist;best=p;}
+    }
+    d[i]=PAL[best][0]; d[i+1]=PAL[best][1]; d[i+2]=PAL[best][2]; d[i+3]=255;
+  }
+  // dark rim where the sprite meets the background
+  const a=(x,y)=>x<0||y<0||x>=FW||y>=FH?0:d[(y*FW+x)*4+3];
+  const rim=[];
+  for(let y=0;y<FH;y++)for(let x=0;x<FW;x++){
+    const i=(y*FW+x)*4;
+    if(d[i+3]&&(!a(x-1,y)||!a(x+1,y)||!a(x,y-1)||!a(x,y+1)))rim.push(i);
+  }
+  for(const i of rim){
+    d[i]=(d[i]*.25+16*.75)|0; d[i+1]=(d[i+1]*.25+14*.75)|0; d[i+2]=(d[i+2]*.25+20*.75)|0;
+  }
+  f.putImageData(img,0,0);
+}
+
+/* ---------- background + compose ---------- */
+function render(){
+  drawFigure(); crunch();
+  // bg: quiet gradient, a moon, drifting gold dust
+  const bands=['#26242e','#232129','#201e26','#1c1a22','#18161d'];
+  for(let i=0;i<5;i++){g.fillStyle=bands[i];g.fillRect(0,i*26,FW,26);}
+  g.fillStyle='#d8d4c6';
+  g.fillRect(84,8,6,6); g.fillRect(85,7,4,8); g.fillRect(83,9,8,4);
+  g.fillStyle='#bfbbae'; g.fillRect(86,10,2,2);
+  const rr=(s=>()=>((s=s*16807%2147483647)/2147483647))(7);
+  for(let k=0;k<26;k++){
+    g.fillStyle=`rgba(201,181,122,${.15+rr()*.3})`;
+    g.fillRect(rr()*FW|0,rr()*FH|0,1,1);
+  }
+  g.drawImage(fig,0,0);
+}
+render();
+window._rerender=render;
+</script>
+</body>
+</html>
