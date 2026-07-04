@@ -509,50 +509,115 @@ const SCN=[
     }
     // phase 2: MARX on the catwalks
     const bst=st-10;
+    const CUT=4.5, HIT=7;                          // arm severed → arm strikes home
     bandsD(['#2b2620','#332d26','#3a332a','#2f2922'],0,216);
     for(let k=0;k<9;k++){const px=k*60-20;
       R(px,30+(k%3)*20,8,180,'#241f1a');
       R(px-14,60+(k%2)*40,36,6,'#1d1914');}
+    // four more goliaths, rising in the haze behind the catwalk
+    for(const [gx2,s2,t0] of [[70,.85,8],[185,.68,8.8],[420,.8,9.6],[290,.52,10.4]]){
+      const rise=clamp((bst-t0)/2.5,0,1); if(rise<=0)continue;
+      const hgt=130*s2*rise, top=216-hgt;
+      R(gx2-30*s2,top,60*s2,hgt,'#3f392e');                 // torso
+      R(gx2-28*s2,top+3,56*s2,8*s2,'#4a443a');
+      R(gx2-42*s2,top+18*s2,12*s2,hgt*.55,'#37312a');        // arms
+      R(gx2+30*s2,top+20*s2,12*s2,hgt*.55,'#37312a');
+      if(rise>.4){                                           // buzzsaw hands
+        disc(gx2-38*s2,top+18*s2+hgt*.55,11*s2,'#4a443a');
+        disc(gx2+36*s2,top+22*s2+hgt*.55,11*s2,'#4a443a');
+      }
+      R(gx2-20*s2,top-18*s2*rise,40*s2,18*s2*rise,'#4a443a'); // head
+      if(rise>.6){
+        R(gx2-7*s2,top-11*s2,14*s2,5*s2,C.red);
+        g.fillStyle='rgba(213,37,46,.25)';
+        g.fillRect(gx2-11*s2,top-13*s2,22*s2,9*s2);
+      }
+    }
     R(0,214,W,8,'#4a4238'); R(0,222,W,3,'#332d24');
     R(0,225,W,H-225,'#17130f');
-    // MARX: goliath with buzzsaw arms
-    const mx=340,my=214, rage=Math.min(1,bst/3);
-    R(mx-30,my-84,64,64,C.rust); R(mx-28,my-82,60,10,'#7a6a58');
-    R(mx-18,my-96,36,14,'#7a6a58'); R(mx-8,my-92,8,5,C.red);
-    limb(mx-30,my-60,mx-64,my-40,8,C.rust2);
-    limb(mx+34,my-60,mx+66,my-44,8,C.rust2);
-    for(const [ax,ay] of [[mx-70,my-34],[mx+72,my-38]]){
-      disc(ax,ay,16,'#8a8578'); disc(ax,ay,10,'#6b5d4f');
-      g.fillStyle='#b8b2a4';
-      for(let k2=0;k2<10;k2++){const th=k2/10*6.28+bst*(rage*6);
-        g.fillRect(ax+Math.cos(th)*16|0,ay+Math.sin(th)*16|0,3,3);}
+    S_.shake=Math.max(0,(S_.shake||0)-dt*10);
+    g.translate((Math.random()-.5)*S_.shake|0,(Math.random()-.5)*S_.shake|0);
+    // MARX: goliath with buzzsaw arms — erodes after the arm comes home
+    const mdis=clamp((bst-HIT)/3,0,1);
+    const mx=340,my=214+(mdis*8|0), rage=Math.min(1,bst/3);
+    if(mdis<1){
+      const S=mdis>0?()=>Math.random()<mdis:()=>false;
+      const px=(a,b,w,h,col)=>{ if(!S())R(mx+a,my+b,w,h,col); };
+      px(-30,-84,64,64,C.rust); px(-28,-82,60,10,'#7a6a58');
+      px(-18,-96,36,14,'#7a6a58'); px(-8,-92,8,5,C.red);
+      if(!S())limb(mx+34,my-60,mx+66,my-44,8,C.rust2);       // far arm stays
+      if(bst<CUT&&!S())limb(mx-30,my-60,mx-64,my-40,8,C.rust2); // near arm until the cut
+      const saws=bst<CUT?[[mx-70,my-34],[mx+72,my-38]]:[[mx+72,my-38]];
+      for(const [ax,ay] of saws){
+        if(S())continue;
+        disc(ax,ay,16,'#8a8578'); disc(ax,ay,10,'#6b5d4f');
+        g.fillStyle='#b8b2a4';
+        for(let k2=0;k2<10;k2++){const th=k2/10*6.28+bst*(rage*6);
+          g.fillRect(ax+Math.cos(th)*16|0,ay+Math.sin(th)*16|0,3,3);}
+      }
+      if(!S())limb(mx-26,my-20,mx-30,my,9,C.rust2);
+      if(!S())limb(mx+28,my-20,mx+32,my,9,C.rust2);
+      if(mdis>0)for(let k=0;k<2;k++)S_.sparks.push({x:mx-30+Math.random()*60,
+        y:120+Math.random()*90,vx:(Math.random()-.5)*14,vy:-18-Math.random()*26,
+        l:.9,c:'#5a5248'});
+    }else{
+      disc(mx-10,224,34,'rgba(90,80,66,.5)'); disc(mx+22,228,22,'rgba(90,80,66,.35)');
     }
-    limb(mx-26,my-20,mx-30,my,9,C.rust2); limb(mx+28,my-20,mx+32,my,9,C.rust2);
-    // 2B dodging + striking
-    const cyc=(bst%2.6)/2.6;
-    const sx2=120+Math.sin(cyc*6.28)*36;
-    drawTwoB(sx2|0,214,st,cyc>.55&&cyc<.8?'slash':'run');
-    if(cyc>.55&&cyc<.62&&S_.clang<bst){ S_.clang=bst+1; sfxSlash();
-      for(let k=0;k<10;k++)S_.sparks.push({x:sx2+30,y:180,vx:(Math.random()-.4)*90,
-        vy:-Math.random()*70,l:.5}); }
-    for(const p of S_.sparks){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=160*dt; p.l-=dt;
-      if(p.l>0){g.fillStyle=C.gold2;g.globalAlpha=clamp(p.l*2,0,1);
+    // the severed arm, remote-controlled: arcs up and drives into marx
+    if(bst>=CUT&&bst<HIT){
+      const p=(bst-CUT)/(HIT-CUT), q=1-p;
+      const qx=q*q*270+2*q*p*200+p*p*342, qy=q*q*180+2*q*p*60+p*p*150;
+      disc(qx,qy,14,'#8a8578'); disc(qx,qy,9,'#6b5d4f');
+      g.fillStyle='#b8b2a4';
+      for(let k2=0;k2<10;k2++){const th=k2/10*6.28+bst*9;
+        g.fillRect(qx+Math.cos(th)*14|0,qy+Math.sin(th)*14|0,3,3);}
+      ring(qx,qy,20,1,'rgba(90,200,230,.4)');                // 9S at the controls
+      ring(qx,qy,25,1,'rgba(90,200,230,.2)');
+    }
+    if(bst>=HIT&&!S_.armHit){ S_.armHit=true; sfxBoom(.13); sfxSlash(); S_.shake=6;
+      for(let k=0;k<26;k++)S_.sparks.push({x:342,y:158,vx:(Math.random()-.5)*130,
+        vy:-Math.random()*100,l:.7,c:C.gold2}); }
+    // the cut itself
+    if(bst>=CUT&&!S_.armCut){ S_.armCut=true; sfxSlash(); S_.shake=3;
+      for(let k=0;k<14;k++)S_.sparks.push({x:276,y:180,vx:(Math.random()-.6)*100,
+        vy:-Math.random()*80,l:.5,c:C.gold2}); }
+    // 9S: down since the descent — she fought in front of him
+    draw9S(176,212,st,'lie');
+    // 2B: duel → watch the arm work → kneel beside 9S
+    if(bst<CUT){
+      const cyc=(bst%2.2)/2.2;
+      const sx2=120+Math.sin(cyc*6.28)*40;
+      drawTwoB(sx2|0,214,st,cyc>.55&&cyc<.8?'slash':'run');
+      if(cyc>.55&&cyc<.62&&S_.clang<bst){ S_.clang=bst+1; sfxSlash();
+        for(let k=0;k<10;k++)S_.sparks.push({x:sx2+30,y:180,vx:(Math.random()-.4)*90,
+          vy:-Math.random()*70,l:.5,c:C.gold2}); }
+    }else if(bst<10){
+      drawTwoB(140,214,st,'stand');
+    }else{
+      drawTwoB(150,214,st,'hold');
+    }
+    for(const p of S_.sparks){ p.x+=p.vx*dt; p.y+=p.vy*dt;
+      p.vy+=(p.c===C.gold2?160:6)*dt; p.l-=dt;
+      if(p.l>0){g.fillStyle=p.c||C.gold2;g.globalAlpha=clamp(p.l*2,0,1);
         g.fillRect(p.x|0,p.y|0,2,2);} }
     g.globalAlpha=1; S_.sparks=S_.sparks.filter(p=>p.l>0);
     drawPod(90,150,st,false);
+    g.setTransform(1,0,0,1,0,0);
     // phase 3: black box bloom (soft, slow)
-    if(bst>14){
-      const bb=clamp((bst-14)/4,0,1);
+    if(bst>16){
+      const bb=clamp((bst-16)/4,0,1);
       if(!S_.boomed){S_.boomed=true;sfxBoom(.1);}
       disc(240,180,bb*260,`rgba(247,244,234,${.16+bb*.3})`);
       disc(240,180,bb*180,`rgba(247,244,234,${.2+bb*.3})`);
       ring(240,180,bb*270,1,`rgba(247,244,234,.8)`);
     }
     caption([
-      [10.5,13.5,"CONTACT. GOLIATH-CLASS: MARX."],
-      [17,20,"TOO MANY. NO WAY OUT."],
-      [21.5,25,'"9S... IT\'S BEEN AN HONOR."','2B'],
-      [26,29.5,"BLACK BOX REACTION CONFIRMED. GLORY TO MANKIND."],
+      [10.5,13,"CONTACT. GOLIATH-CLASS: MARX."],
+      [14.6,16.8,"SHE TOOK ITS ARM - AND 9S TOOK ITS CONTROLS."],
+      [18.5,21,"FOUR MORE SIGNALS. ALL GOLIATH-CLASS."],
+      [21.3,23.3,"TOO MANY. NO WAY OUT."],
+      [23.6,26,'"9S... IT\'S BEEN AN HONOR."','2B'],
+      [26.3,29.5,"BLACK BOX REACTION CONFIRMED. GLORY TO MANKIND."],
     ],st);
   }},
 /* ---- 3 THE BUNKER ---- */
