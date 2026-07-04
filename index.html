@@ -176,6 +176,22 @@
       </div>
     </a>
 
+    <a class="card" href="watch-kaine.html">
+      <div class="thumb">
+        <canvas id="th3" width="192" height="108"></canvas>
+        <span class="live">PIXEL &middot; CHIPTUNE</span>
+        <span class="dur">4:04</span>
+      </div>
+      <div class="meta">
+        <div class="av"><canvas id="av3" width="14" height="14"></canvas></div>
+        <div>
+          <h3>NieR Replicant &mdash; 16-BIT | Kain&eacute; / Escape (Piano)</h3>
+          <div class="sub">Grimoire Weiss <span class="check">&#10004;</span></div>
+          <div class="sub"><span id="views3">1 view</span> &middot; 1,400 years from now</div>
+        </div>
+      </div>
+    </a>
+
     <div class="card skel"><div class="thumb"></div>
       <div class="meta"><div class="av"></div>
         <div style="flex:1"><div class="bar b1"></div><div class="bar b2"></div></div></div></div>
@@ -269,6 +285,46 @@
   gx.fillStyle='rgba(0,0,0,.25)';gx.fillRect(0,0,W,3);gx.fillRect(0,H-3,W,3);
 })();
 
+/* ---- Kaine thumbnail: the Aerie chasm ---- */
+(function(){
+  const c=document.getElementById('th3'),gx=c.getContext('2d');
+  const W=192,H=108;
+  const sky=['#1b1826','#171422','#14111e','#12101a'];
+  for(let i=0;i<4;i++){gx.fillStyle=sky[i];gx.fillRect(0,i*15,W,15);}
+  gx.fillStyle='#cdc6b4';gx.fillRect(150,10,10,10);gx.fillRect(152,8,6,14);gx.fillRect(148,12,14,6);
+  const ch=['#100d18','#0d0a14','#0a0812'];
+  for(let i=0;i<3;i++){gx.fillStyle=ch[i];gx.fillRect(0,60+i*16,W,16);}
+  let s=23;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647;};
+  gx.fillStyle='rgba(215,212,225,.5)';
+  for(let i=0;i<26;i++)gx.fillRect(rnd()*W|0,rnd()*50|0,1,1);
+  // cliffs
+  gx.fillStyle='#2b2833';gx.fillRect(0,30,42,78);gx.fillRect(152,36,40,72);
+  gx.fillStyle='#332f3d';gx.fillRect(4,26,30,82);gx.fillRect(160,30,28,78);
+  // walkway across
+  gx.fillStyle='#4a3d30';gx.fillRect(34,74,124,3);
+  gx.fillStyle='#3a2f24';gx.fillRect(34,77,124,1);
+  gx.fillStyle='#6a5c48';gx.fillRect(34,66,1,8);gx.fillRect(157,66,1,8);gx.fillRect(34,66,124,1);
+  // shades on the right
+  for(const [sx,sy] of [[126,74],[142,72]]){
+    gx.fillStyle='#0d0a14';gx.fillRect(sx-5,sy-9,10,9);gx.fillRect(sx-3,sy-11,6,3);
+    gx.fillStyle='#e8c069';gx.fillRect(sx-3,sy-8,2,2);gx.fillRect(sx+2,sy-8,2,2);
+    gx.fillStyle='rgba(138,92,201,.5)';gx.fillRect(sx-6,sy-12,2,2);
+  }
+  // kaine mid-dash, blade out
+  const x0=76,y0=74;
+  gx.fillStyle='#d8b294';gx.fillRect(x0-2,y0-9,3,5);
+  gx.fillStyle='#c9c2b0';gx.fillRect(x0+2,y0-9,3,5);
+  gx.fillStyle='#efeade';gx.fillRect(x0-3,y0-14,8,5);
+  gx.fillStyle='#c9c2b0';gx.fillRect(x0-4,y0-13,2,3);
+  gx.fillStyle='#e6e2d4';gx.fillRect(x0-3,y0-20,9,6);
+  gx.fillStyle='#d8b294';gx.fillRect(x0+3,y0-17,3,2);
+  gx.fillStyle='#f0eee4';gx.fillRect(x0+4,y0-21,2,2);
+  gx.fillStyle='#cdc6b4';for(let k=0;k<8;k++)gx.fillRect(x0+7+k,y0-17+(k>>1),1,1);
+  gx.fillStyle='rgba(138,92,201,.6)';
+  for(let i=0;i<10;i++)gx.fillRect(100+rnd()*40|0,60+rnd()*14|0,1,1);
+  gx.fillStyle='rgba(0,0,0,.25)';gx.fillRect(0,0,W,3);gx.fillRect(0,H-3,W,3);
+})();
+
 /* ---- pod avatars ---- */
 function pod(id,body,dark){
   const g=document.getElementById(id).getContext('2d');
@@ -278,6 +334,14 @@ function pod(id,body,dark){
 }
 pod('av0','#8a857a','#54504c');
 pod('av1','#8a857a','#54504c');
+/* grimoire weiss avatar: a floating book */
+(function(){
+  const gx=document.getElementById('av3').getContext('2d');
+  gx.fillStyle='#cdc6b4';gx.fillRect(2,3,10,8);
+  gx.fillStyle='#8a8276';gx.fillRect(7,3,1,8);
+  gx.fillStyle='#54504c';gx.fillRect(2,3,10,1);gx.fillRect(2,10,10,1);
+  gx.fillStyle='#e8c069';gx.fillRect(4,6,2,2);gx.fillRect(9,6,2,2);
+})();
 /* pyrefly avatar for The Fayth */
 (function(){
   const gx=document.getElementById('av2').getContext('2d');
@@ -291,13 +355,15 @@ pod('av1','#8a857a','#54504c');
 document.getElementById('sform').addEventListener('submit',e=>{
   e.preventDefault();
   const b=document.getElementById('sbox');
-  b.value='';b.placeholder='no results. this world has two videos.';
+  b.value='';b.placeholder='no results. this world has three videos.';
 });
 try{
   const n=+localStorage.getItem('nier16_views')||1;
   document.getElementById('views').textContent=n+(n===1?' view':' views');
   const m=+localStorage.getItem('ffx16_views')||1;
   document.getElementById('views2').textContent=m+(m===1?' view':' views');
+  const k=+localStorage.getItem('kaine16_views')||1;
+  document.getElementById('views3').textContent=k+(k===1?' view':' views');
 }catch(e){}
 </script>
 </body>
