@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRTube</title>
+<style>
+  :root{
+    --bg:#0f0f0f; --bg2:#161616; --bg3:#212121; --fg:#f1f1f1;
+    --fg2:#aaaaaa; --line:#2b2b2b; --accent:#c4302b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);
+    font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;}
+  a{color:inherit;text-decoration:none}
+
+  /* ---- top bar ---- */
+  header{position:fixed;top:0;left:0;right:0;height:56px;background:var(--bg);
+    display:flex;align-items:center;gap:16px;padding:0 16px;z-index:10;
+    border-bottom:1px solid var(--line);}
+  .burger{width:40px;height:40px;border-radius:50%;display:flex;flex-direction:column;
+    justify-content:center;align-items:center;gap:4px;cursor:pointer;flex:0 0 auto;}
+  .burger:hover{background:var(--bg3)}
+  .burger i{display:block;width:18px;height:2px;background:var(--fg)}
+  .logo{display:flex;align-items:center;gap:6px;font-weight:700;font-size:18px;
+    letter-spacing:-.5px;flex:0 0 auto;}
+  .logo .btn{width:30px;height:21px;background:var(--accent);border-radius:5px;
+    display:flex;align-items:center;justify-content:center;}
+  .logo .btn::after{content:"";border-style:solid;border-width:5px 0 5px 9px;
+    border-color:transparent transparent transparent #fff;}
+  .logo sup{font-size:9px;color:var(--fg2);font-weight:400;margin-left:2px}
+  .search{flex:1 1 auto;max-width:560px;display:flex;margin:0 auto;}
+  .search input{flex:1;background:#121212;border:1px solid #303030;color:var(--fg);
+    border-radius:20px 0 0 20px;padding:8px 16px;font-size:14px;outline:none;min-width:60px;}
+  .search input:focus{border-color:#1c62b9}
+  .search button{background:var(--bg3);border:1px solid #303030;border-left:none;
+    border-radius:0 20px 20px 0;width:56px;cursor:pointer;color:var(--fg);font-size:15px;}
+  .avatar-top{width:32px;height:32px;border-radius:50%;background:#3d3730;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;margin-left:auto;}
+  .avatar-top canvas{width:24px;height:24px;image-rendering:pixelated}
+
+  /* ---- sidebar ---- */
+  nav{position:fixed;top:56px;left:0;bottom:0;width:210px;padding:12px 8px;
+    overflow-y:auto;background:var(--bg);}
+  nav .item{display:flex;align-items:center;gap:20px;padding:9px 14px;border-radius:10px;
+    cursor:pointer;color:var(--fg);font-size:14px;white-space:nowrap;}
+  nav .item:hover{background:var(--bg3)}
+  nav .item.active{background:var(--bg3);font-weight:600}
+  nav .item span.ic{width:20px;text-align:center;font-size:15px;opacity:.9}
+  nav hr{border:none;border-top:1px solid var(--line);margin:10px 6px}
+  nav .head{font-size:13px;color:var(--fg2);padding:8px 14px 4px}
+  nav .foot{font-size:11px;color:#666;padding:16px 14px;line-height:1.7}
+  @media(max-width:840px){nav{display:none}main{margin-left:0!important}}
+
+  /* ---- main ---- */
+  main{margin-left:210px;padding:72px 24px 40px;}
+  .chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px;}
+  .chip{background:var(--bg3);border-radius:8px;padding:6px 12px;font-size:13px;
+    color:var(--fg);cursor:pointer;white-space:nowrap;}
+  .chip.on{background:var(--fg);color:var(--bg)}
+  .chip:not(.on):hover{background:#383838}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+    gap:20px 16px;max-width:1400px;}
+
+  .card{cursor:pointer;border-radius:12px;}
+  .thumb{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;
+    background:#000;transition:border-radius .15s;}
+  .card:hover .thumb{border-radius:0}
+  .thumb canvas{width:100%;height:100%;image-rendering:pixelated;display:block}
+  .dur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);
+    padding:1px 5px;border-radius:4px;font-size:12px;font-weight:600;}
+  .live{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.65);color:#eee;
+    padding:1px 6px;border-radius:4px;font-size:11px;letter-spacing:.4px;}
+  .meta{display:flex;gap:12px;padding:10px 2px 0;}
+  .meta .av{width:36px;height:36px;border-radius:50%;background:#3d3730;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .meta .av canvas{width:28px;height:28px;image-rendering:pixelated}
+  .meta h3{font-size:15px;font-weight:600;line-height:1.35;margin-bottom:4px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .meta .sub{font-size:13px;color:var(--fg2)}
+  .meta .sub .check{font-size:11px}
+
+  /* skeleton placeholders */
+  .skel .thumb{background:linear-gradient(100deg,#1b1b1b 40%,#242424 50%,#1b1b1b 60%);
+    background-size:200% 100%;animation:sh 1.6s infinite linear;}
+  .skel .bar{height:13px;border-radius:4px;background:#1f1f1f;margin-bottom:7px}
+  .skel .bar.b1{width:88%}.skel .bar.b2{width:55%}
+  .skel .av{background:#1f1f1f}
+  .skel{cursor:default}
+  @keyframes sh{from{background-position:200% 0}to{background-position:-200% 0}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="burger"><i></i><i></i><i></i></div>
+  <a class="logo" href="index.html"><span class="btn"></span>CRTube<sup>16-BIT</sup></a>
+  <form class="search" id="sform">
+    <input id="sbox" type="text" placeholder="Search" autocomplete="off">
+    <button type="submit" title="search">&#9906;</button>
+  </form>
+  <div class="avatar-top"><canvas id="av0" width="12" height="12"></canvas></div>
+</header>
+
+<nav>
+  <div class="item active"><span class="ic">&#8962;</span>Home</div>
+  <div class="item"><span class="ic">&#9654;</span>Shorts</div>
+  <div class="item"><span class="ic">&#9641;</span>Subscriptions</div>
+  <hr>
+  <div class="head">You &rsaquo;</div>
+  <div class="item"><span class="ic">&#8634;</span>History</div>
+  <div class="item"><span class="ic">&#9825;</span>Liked (data lost)</div>
+  <div class="item"><span class="ic">&#128337;</span>Watch later, if ever</div>
+  <hr>
+  <div class="head">Channels</div>
+  <div class="item"><span class="ic">&#9679;</span>Pod 042</div>
+  <div class="item"><span class="ic">&#9675;</span>Pod 153</div>
+  <div class="item"><span class="ic">&#10022;</span>The Fayth</div>
+  <div class="item"><span class="ic">&#9635;</span>Machine Village</div>
+  <div class="item"><span class="ic">&#9650;</span>The Bunker</div>
+  <hr>
+  <div class="foot">&copy; CRTube Broadcasting<br>384&times;216, since forever.<br><br>
+    Everything on this server<br>is designed to end.</div>
+</nav>
+
+<main>
+  <div class="chips">
+    <div class="chip on">All</div>
+    <div class="chip">Music</div>
+    <div class="chip">Chiptune</div>
+    <div class="chip">Pixel art</div>
+    <div class="chip">Androids</div>
+    <div class="chip">Fishing</div>
+    <div class="chip">Existential dread</div>
+    <div class="chip">Endings (A&ndash;Z)</div>
+  </div>
+
+  <div class="grid">
+    <a class="card" href="watch.html">
+      <div class="thumb">
+        <canvas id="th" width="192" height="108"></canvas>
+        <span class="live">PIXEL &middot; CHIPTUNE</span>
+        <span class="dur">2:07</span>
+      </div>
+      <div class="meta">
+        <div class="av"><canvas id="av1" width="14" height="14"></canvas></div>
+        <div>
+          <h3>NieR:Automata &mdash; 16-BIT | Weight of the World (Piano Collections)</h3>
+          <div class="sub">Pod 042 <span class="check">&#10004;</span></div>
+          <div class="sub"><span id="views">1 view</span> &middot; 11,945 years from now</div>
+        </div>
+      </div>
+    </a>
+
+    <a class="card" href="watch-ffx.html">
+      <div class="thumb">
+        <canvas id="th2" width="192" height="108"></canvas>
+        <span class="live">PIXEL &middot; CHIPTUNE</span>
+        <span class="dur">2:35</span>
+      </div>
+      <div class="meta">
+        <div class="av"><canvas id="av2" width="14" height="14"></canvas></div>
+        <div>
+          <h3>Final Fantasy X &mdash; 16-BIT | To Zanarkand (Piano)</h3>
+          <div class="sub">The Fayth <span class="check">&#10004;</span></div>
+          <div class="sub"><span id="views2">1 view</span> &middot; 1,000 years ago</div>
+        </div>
+      </div>
+    </a>
+
+    <div class="card skel"><div class="thumb"></div>
+      <div class="meta"><div class="av"></div>
+        <div style="flex:1"><div class="bar b1"></div><div class="bar b2"></div></div></div></div>
+    <div class="card skel"><div class="thumb"></div>
+      <div class="meta"><div class="av"></div>
+        <div style="flex:1"><div class="bar b1"></div><div class="bar b2"></div></div></div></div>
+  </div>
+</main>
+
+<script>
+'use strict';
+/* ---- pixel thumbnail: 2B walking the city ruins at dusk ---- */
+(function(){
+  const c=document.getElementById('th'),g=c.getContext('2d');
+  const W=192,H=108;
+  const bands=['#8f8a7c','#9a927e','#a49a82','#ada087','#b5a68a','#bcac8e'];
+  for(let i=0;i<6;i++){g.fillStyle=bands[i];g.fillRect(0,i*15,W,15);}
+  g.fillStyle='#d8d2be';g.fillRect(150,12,10,10);g.fillRect(152,10,6,14);g.fillRect(148,14,14,6);
+  // far skyline
+  let s=7;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647;};
+  g.fillStyle='#7c766a';
+  for(let x=0;x<W;){const w=8+rnd()*16|0,h=26+rnd()*36|0;g.fillRect(x,88-h,w,h);x+=w+(2+rnd()*8|0);}
+  // mid buildings + vegetation
+  for(let x=-4;x<W;){const w=12+rnd()*18|0,h=24+rnd()*44|0;
+    g.fillStyle='#4e4a44';g.fillRect(x,88-h,w,h);
+    if(rnd()<.6){g.fillStyle='#6b6f4e';g.fillRect(x,86-h,w,3);}
+    g.fillStyle='#15130f';
+    for(let wy=92-h;wy<82;wy+=7)for(let wx=x+2;wx<x+w-2;wx+=6)
+      if(rnd()<.5)g.fillRect(wx,wy,2,3);
+    x+=w+(1+rnd()*10|0);}
+  g.fillStyle='#4e483f';g.fillRect(0,88,W,20);
+  g.fillStyle='#38332c';for(let i=0;i<26;i++)g.fillRect((i*31)%W,87+(i%3),7,3);
+  // 2B silhouette
+  const x0=88,y0=88;
+  g.fillStyle='#17151a';
+  g.fillRect(x0-1,y0-12,3,6);g.fillRect(x0+2,y0-12,3,6);          // legs
+  g.fillRect(x0-2,y0-6,3,6);g.fillRect(x0+3,y0-6,3,6);
+  g.fillRect(x0-4,y0-16,10,4);g.fillRect(x0-2,y0-21,6,5);          // skirt, torso
+  g.fillStyle='#8a857a';g.fillRect(x0-6,y0-27,2,8);                // katana
+  g.fillStyle='#e9e3d3';g.fillRect(x0-3,y0-28,9,7);g.fillRect(x0-4,y0-26,2,4); // hair
+  g.fillStyle='#17151a';g.fillRect(x0+1,y0-25,5,1);                // blindfold
+  // pod
+  g.fillStyle='#8a857a';g.fillRect(x0-18,y0-30,7,4);
+  g.fillStyle='#54504c';g.fillRect(x0-18,y0-26,7,2);
+  // dust
+  g.fillStyle='rgba(200,190,160,.5)';
+  for(let i=0;i<14;i++)g.fillRect((i*37+9)%W,(i*23+11)%80,1,1);
+  // vignette-ish corners
+  g.fillStyle='rgba(0,0,0,.25)';g.fillRect(0,0,W,3);g.fillRect(0,H-3,W,3);
+})();
+
+/* ---- FFX thumbnail: Zanarkand, city of lights ---- */
+(function(){
+  const c=document.getElementById('th2'),gx=c.getContext('2d');
+  const W=192,H=108;
+  const sky=['#0a0d18','#0c1020','#0e1428','#101830'];
+  for(let i=0;i<4;i++){gx.fillStyle=sky[i];gx.fillRect(0,i*15,W,15);}
+  let s=31;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647;};
+  // towers
+  const tws=[];
+  gx.fillStyle='#0e1326';
+  let x=0;while(x<W){const w=8+rnd()*14|0,h=18+rnd()*40|0;
+    gx.fillRect(x,60-h,w,h);tws.push({x,w,h});x+=w+(1+rnd()*4|0);}
+  // lit windows, inside towers only
+  for(let i=0;i<240;i++){
+    const b=tws[rnd()*tws.length|0];
+    gx.fillStyle=rnd()<.6?'#e8d8a0':(rnd()<.5?'#9adce8':'#e8b070');
+    gx.globalAlpha=.4+rnd()*.6;
+    gx.fillRect(b.x+1+rnd()*(b.w-2)|0,60-b.h+2+rnd()*(b.h-4)|0,rnd()<.15?2:1,1);
+  }
+  gx.globalAlpha=1;
+  // stadium dome glow
+  gx.fillStyle='rgba(74,200,216,.14)';gx.fillRect(128,40,42,20);
+  for(let a=0;a<30;a++){const th=Math.PI+a/30*Math.PI;
+    gx.fillStyle='#4ac8d8';gx.fillRect(149+Math.cos(th)*20|0,60+Math.sin(th)*17|0,1,1);}
+  // water
+  const wa=['#0c1626','#0a1220','#081020'];
+  for(let i=0;i<3;i++){gx.fillStyle=wa[i];gx.fillRect(0,60+i*16,W,16);}
+  for(let i=0;i<80;i++){
+    gx.fillStyle=rnd()<.6?'#e8d8a0':'#9adce8';gx.globalAlpha=.14;
+    gx.fillRect(rnd()*W|0,62+rnd()*40|0,1+rnd()*2|0,1);
+  }
+  gx.globalAlpha=1;
+  // pier + figure
+  gx.fillStyle='#0d0f18';gx.fillRect(0,92,76,4);gx.fillRect(72,92,3,16);
+  for(let i=0;i<3;i++)gx.fillRect(6+i*24,96,2,12);
+  gx.fillStyle='#d8a878';gx.fillRect(56,86,2,6);gx.fillRect(59,86,2,6);  // legs on pier
+  gx.fillStyle='#22222c';gx.fillRect(55,83,7,3);        // shorts
+  gx.fillStyle='#e8b93f';gx.fillRect(55,77,7,6);        // shirt
+  gx.fillStyle='#e8c96a';gx.fillRect(55,72,7,5);gx.fillRect(56,70,2,2);gx.fillRect(60,70,2,2);
+  gx.fillStyle='rgba(0,0,0,.25)';gx.fillRect(0,0,W,3);gx.fillRect(0,H-3,W,3);
+})();
+
+/* ---- pod avatars ---- */
+function pod(id,body,dark){
+  const g=document.getElementById(id).getContext('2d');
+  g.fillStyle=body;g.fillRect(2,3,9,5);g.fillRect(3,2,7,1);
+  g.fillStyle=dark;g.fillRect(2,8,9,2);g.fillRect(4,10,2,2);g.fillRect(7,10,2,2);
+  g.fillStyle='#fff';g.fillRect(9,4,1,1);
+}
+pod('av0','#8a857a','#54504c');
+pod('av1','#8a857a','#54504c');
+/* pyrefly avatar for The Fayth */
+(function(){
+  const gx=document.getElementById('av2').getContext('2d');
+  const px=[[6,2,'#7de8d8'],[4,4,'#7de8d8'],[8,5,'#b08cd8'],[6,6,'#d8f0ec'],
+    [3,7,'#7de8d8'],[9,8,'#7de8d8'],[5,9,'#b08cd8'],[7,11,'#7de8d8']];
+  for(const [x,y,c] of px){gx.fillStyle=c;gx.fillRect(x,y,1,1);}
+  gx.fillStyle='rgba(125,232,216,.35)';gx.fillRect(5,5,4,4);
+})();
+
+/* ---- toys ---- */
+document.getElementById('sform').addEventListener('submit',e=>{
+  e.preventDefault();
+  const b=document.getElementById('sbox');
+  b.value='';b.placeholder='no results. this world has two videos.';
+});
+try{
+  const n=+localStorage.getItem('nier16_views')||1;
+  document.getElementById('views').textContent=n+(n===1?' view':' views');
+  const m=+localStorage.getItem('ffx16_views')||1;
+  document.getElementById('views2').textContent=m+(m===1?' view':' views');
+}catch(e){}
+</script>
+</body>
+</html>

@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NieR:Automata — 16-BIT</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{
+    width:min(96vw, calc(96vh * 16 / 9));
+    aspect-ratio:16/9;
+    image-rendering:pixelated;
+    background:#000;
+  }
+  /* CRT scanlines + vignette */
+  #wrap::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.45) 100%),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv" width="384" height="216"></canvas></div>
+<a id="home" href="index.html" title="back to CRTube">&larr; CRTube</a>
+<style>
+  #home{position:fixed;top:10px;left:12px;z-index:20;color:#555;
+    font:12px ui-monospace,Menlo,monospace;text-decoration:none;}
+  #home:hover{color:#bbb}
+</style>
+<script>
+'use strict';
+const W=384,H=216, cv=document.getElementById('cv'), g=cv.getContext('2d');
+g.imageSmoothingEnabled=false;
+
+/* ---------------- utils ---------------- */
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function hex(c){return[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];}
+function mix(c1,c2,t){const a=hex(c1),b=hex(c2);t=clamp(t,0,1);
+  return `rgb(${(lerp(a[0],b[0],t))|0},${(lerp(a[1],b[1],t))|0},${(lerp(a[2],b[2],t))|0})`;}
+function R(x,y,w,h,c){g.fillStyle=c;g.fillRect(x|0,y|0,w|0,h|0);}
+
+/* ---------------- palette ---------------- */
+const C={
+  black:'#0b0a0d', ink:'#17151a', dgrey:'#2b2833', grey:'#54504c', lgrey:'#8a857a',
+  bone:'#cdc6b4', white:'#efeade', hair:'#e9e3d3', skin:'#d8b294',
+  red:'#d5252e', red2:'#7d1119', gold:'#e8c069', olive:'#6b6f4e',
+};
+
+/* ---------------- 3x5 pixel font ---------------- */
+const FONT={
+A:[2,5,7,5,5],B:[6,5,6,5,6],C:[3,4,4,4,3],D:[6,5,5,5,6],E:[7,4,6,4,7],F:[7,4,6,4,4],
+G:[3,4,5,5,3],H:[5,5,7,5,5],I:[7,2,2,2,7],J:[1,1,1,5,2],K:[5,5,6,5,5],L:[4,4,4,4,7],
+M:[7,7,5,5,5],N:[6,5,5,5,5],O:[2,5,5,5,2],P:[6,5,6,4,4],Q:[2,5,5,7,1],R:[6,5,6,5,5],
+S:[3,4,2,1,6],T:[7,2,2,2,2],U:[5,5,5,5,7],V:[5,5,5,5,2],W:[5,5,5,7,7],X:[5,5,2,5,5],
+Y:[5,5,2,2,2],Z:[7,1,2,4,7],
+'0':[7,5,5,5,7],'1':[2,6,2,2,7],'2':[7,1,7,4,7],'3':[7,1,3,1,7],'4':[5,5,7,1,1],
+'5':[7,4,6,1,6],'6':[7,4,7,5,7],'7':[7,1,2,2,2],'8':[7,5,7,5,7],'9':[7,5,7,1,7],
+'.':[0,0,0,0,2],',':[0,0,0,2,4],':':[0,2,0,2,0],'!':[2,2,2,0,2],'?':[7,1,3,0,2],
+"'":[2,4,0,0,0],'-':[0,0,7,0,0],'·':[0,0,2,0,0],'"':[5,5,0,0,0],'/':[1,1,2,4,4],
+'(':[1,2,2,2,1],')':[4,2,2,2,4],
+};
+function drawText(s,x,y,c,sc){
+  sc=sc||1; g.fillStyle=c; s=(''+s).toUpperCase();
+  let cx=x|0;
+  for(const ch of s){
+    if(ch===' '){cx+=4*sc;continue;}
+    const gl=FONT[ch];
+    if(gl){for(let r=0;r<5;r++)for(let b=0;b<3;b++)
+      if(gl[r]>>(2-b)&1)g.fillRect(cx+b*sc,(y|0)+r*sc,sc,sc);}
+    cx+=4*sc;
+  }
+}
+const textW=(s,sc)=>s.length*4*(sc||1)-(sc||1);
+function ctext(s,y,c,sc){drawText(s,(W-textW(s,sc))/2,y,c,sc);}
+
+/* ================= AUDIO ================= */
+let ac=null, master, musicBus, filt, echoIn, echoDelay, rainGain, noiseBuf, pw25, pw125;
+let stepI=0, nextT=0, musicOn=false, musicVol=1;
+const SPB=60/63, STEP=SPB/4;                 // fallback engine: 63 bpm, 16th steps
+const nfr=m=>440*Math.pow(2,(m-69)/12);
+
+/* ---- MIDI playback (loads the user's .mid at runtime) ---- */
+let MIDI=null, songStart=0, midiPtr=0, beatPtr=0;
+function parseMidi(u){
+  const rd32=i=>((u[i]<<24|u[i+1]<<16|u[i+2]<<8|u[i+3])>>>0), rd16=i=>u[i]<<8|u[i+1];
+  if(u[0]!==0x4D||u[1]!==0x54||u[2]!==0x68||u[3]!==0x64)return null;
+  const ntrk=rd16(10), tpq=rd16(12);
+  let i=14; const raw=[], tempos=[{t:0,us:500000}];
+  for(let tr=0;tr<ntrk;tr++){
+    if(rd32(i)!==0x4D54726B)return null;       // 'MTrk'
+    const len=rd32(i+4); let j=i+8; const end=j+len, on={}; let t=0,run=0;
+    while(j<end){
+      let v=0,b;
+      do{b=u[j++];v=(v<<7)|(b&127);}while(b&128);
+      t+=v;
+      let s=u[j];
+      if(s===0xFF){ const mt=u[j+1]; let ln=0; j+=2;
+        do{b=u[j++];ln=(ln<<7)|(b&127);}while(b&128);
+        if(mt===0x51)tempos.push({t,us:u[j]<<16|u[j+1]<<8|u[j+2]});
+        j+=ln;
+      }else if(s===0xF0||s===0xF7){ let ln=0; j++;
+        do{b=u[j++];ln=(ln<<7)|(b&127);}while(b&128); j+=ln;
+      }else{
+        if(s&0x80){run=s;j++;}else s=run;
+        const hi=s&0xF0;
+        if(hi===0xC0||hi===0xD0)j+=1;
+        else{ const p1=u[j],p2=u[j+1]; j+=2;
+          if(hi===0x90&&p2>0)(on[p1]=on[p1]||[]).push({t,v:p2});
+          else if(hi===0x80||(hi===0x90&&p2===0)){
+            const q=(on[p1]||[]).shift(); if(q)raw.push({st:q.t,en:t,m:p1,v:q.v,tr});
+          }
+        }
+      }
+    }
+    i=end;
+  }
+  tempos.sort((a,b)=>a.t-b.t);
+  const seg=[]; let sec=0;
+  for(let k=0;k<tempos.length;k++){
+    if(k>0)sec+=(tempos[k].t-tempos[k-1].t)/tpq*tempos[k-1].us/1e6;
+    seg.push({t:tempos[k].t,sec,us:tempos[k].us});
+  }
+  const toSec=t=>{let s=seg[0];for(const x of seg){if(x.t<=t)s=x;else break;}
+    return s.sec+(t-s.t)/tpq*s.us/1e6;};
+  const ev=raw.map(n=>({t:toSec(n.st),d:Math.max(.09,toSec(n.en)-toSec(n.st)),m:n.m,v:n.v/127,tr:n.tr}))
+    .sort((a,b)=>a.t-b.t);
+  if(!ev.length)return null;
+  // which track is the low/accompaniment hand? (lowest average pitch, if >1 track has notes)
+  const sum={},cnt={};
+  for(const e of ev){sum[e.tr]=(sum[e.tr]||0)+e.m;cnt[e.tr]=(cnt[e.tr]||0)+1;}
+  const trks=Object.keys(cnt);
+  const bassTrack=trks.length>1
+    ? +trks.reduce((a,b)=>sum[a]/cnt[a]<=sum[b]/cnt[b]?a:b) : -1;
+  const spb=seg[0].us/1e6;
+  const dur=ev.reduce((m,e)=>Math.max(m,e.t+e.d),0)+spb*2;
+  return {ev,dur,spb,bassTrack,rubato:tempos.length>3};
+}
+const MIDI_B64='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QAAARQAHQEAARUGBY0AAAEUADUBAAEdBcUAAAEcAB0BAAEhBgntAAABIABVAQABIQYEXQAAASAAJQEAASEGBF0AAAEgACUNAAEhAAE9Bix9DAABIAABPAAFHQABPQXFHAABPAAdFQABNQXFFAABNAAdDQABMQXFDAABMAAdDQABMQYFjQwAATAANRUEAR0EASkGGHUUAAEcAAEoAhAtKQXFKAAdIQXFIAAdHQYFjRwANQEAARUAASEGHD0AAAEUAAEgAMUNAAEdAAEpBhw9DAABHAABKADFDQABIQABMQYNHQwCBGEgAAEwAIUhAAE1AgRdIAABNAAlIQABMQIEXSAAATAAJQUAAQ0AASECFK0EAAEMAAEgAJUFAAEhBgWNBAABIAA1BQABFQABIQYFjQQAARQAASAANQUAASEFxQQAASAAHQUAASEGBY0EAAEgADUFAAEhBgWNBAABIAA1BQABIQYJVQQAASAATPkAAR0GBYz4AAEcADUBAAEhBgWNAAABIAA1BQABKQYFjQQAASgANQUAASkGBY0EAAEoADUNAAExBcUMAAEwAB0NAAExBhDlDAABMAIdfQEAARUAASEGHD0AAAEUAAEgAMUNEAEdEAEpFhw9DAABHAABKADFDSABISABMSYNHQwCBGEgAAEwAIUhKAE1KgRdIAABNAAlISwBMS4EXSAAATAAJQUwAQ0wASEyFK0EAAEMAAEgAJUNPAEhQgWNDAABIAA1DURlIUBlLUBlPUYEjSAAASwAATwABQwABQ1EASFAAT1FxQwAASAAATwAHQ1EASFAAT1GBY0MAAEgAAE8ADURRAEtQAFBRgWNEAABLAABQAA1DUQBIUABPUYJVQwAASAAATwATQVEASFAATVGBY0EAAEgAAE0ADT9RAEhQAEtRgWM/AABIAABLAA1BUQBIUABNUYFjQQAASAAATQANPlEAQ1AASFAASlGKVz4AAEMAAEgAAEoASUNQAEdRcUMAAEcAB0VQAEhRcUUAAEgAB0dQAEpRgWNHAABKAA1FUABHUABMUYQ5RQAARwAATAAfRFAAR1AATVFxRAAARwAATQAHRFAAR1AATFFxRAAARwAATAAHRFAAR1AATFGGHUQAAEcAAEwAK0RQAEdQAExRgWNEAABHAABMAA1AUABIUXFAAABIAAdAUABIUXFAAABIAAdAUABHUXFAAABHAAdAUABIUYFjQAAASAANSFAATFAAT1GBY0gAAEwAAE8ADUhQAExQAE9Rhh1IAABMAABPACtAUABHUYFjQAAARwANQFAASFFxQAAASAAHQFAASFFxQAAASAAHQFAAR1FxQAAARwAHQFAASFGBY0AAAEgADUhQAExQAFFRgWNIAABMAABRAA1HUABMUABPUYQ5RwAATAAATwCBP0FQAEhRgRdBAABIAAlDUABKUYEXQwAASgAJQ1AATFGBY0MAAEwADUVQAE1RcUUAAE0AB0NQAExRgWNDAABMAA1FUABNUYFjRQAATQANQ1AATFGCVUMAAEwAE0FQAEpRgWNBAABKAA1AUABIUYFjQAAASAANQVAASlGIAUoAN0hRO0EANkgABz5QAEdRhSs+AABHACVEUABHUIFjRAAARwANQFAASFFxQAAASAAHQFAASFFxQAAASAAHQFAAR1FxQAAARwAHQFAASFGBY0AAAEgADUhQAExQAE9RgWNIAABMAABPAA1IUABMUABPUYQ5SAAATAAATwCBP0BQAEdRgRdAAABHAAlAUABHUYEXQAAARwAJQFAASFFxQAAASAAHQFAASFFxQAAASAAHQFAAR1FxQAAARwAHQFAASFGBY0AAAEgADUdQAExQAE9RgWNHAABMAABPAA1HUABMUABPUYFjRwAATAAATwANSFAAUVFxSAAAUQAHR1AAT1GCe0cAAE8AFUBQAEhRgRdAAABIAAlBUABKUYEXQQAASgAJQ1AATFGBY0MAAEwADUVQAE1RcUUAAE0AB0NQAExRgWNDAABMAA1FUABNUYFjRQAATQANQ1AATFGCVUMAAEwAE0FQAEpRgWNBAABKAA1AUABIUYFjQAAASAANQVAASlGMO0EAAEoAVUwxAEQxAEcxcUwAB0oxcUoAB0gxcUgAB0cAAEcxX0QAEkcAB0gxAEAxgWNIAA1IMXFIAAdIMYFjSAANSDGCN0AAHkgAE0cxAEAxgWNHAA1IMYFjSAANTDGBY0wADU8xgT9AACRPAA1IMSVMMSdPMYUCTAAATwABSAABRTEASDFxRQAASAAHRTQASDWIAUUAAEgANzxRAENRilc8AABDAEk+UABHUYFjPgAARwANQFAASFFxQAAASAAHQFAASFF4/1EDDDUAg0GQQAAASACBFzRRcTQABzlRcTkABz5RcT4AB0BR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QoNhsEAAAUB/gy2QOQAxNEaDRzQAGSlIAbBAAAFAf4FhkCkADTBJgWMwAA01SoNHNQAZMEwBsEAAAUB/g0WQMAAZKU6DRykAGSRQACtQADBQAbBAAAFAf4JlkCQAACsAADAAASRQACtQADBQglskAAArAAAwAA0kUAArUAAwUIFvJAAAKwAAMAABJFAAK1AAMFABsEAAAUB/gmWQJAAAKwAAMAABJFAAK1AAMFCCWyQAACsAADAADSRQACtQADBQgW8kAAArAAAwAAErUAAyUAA3UAGwQAABQH+CZZArAAAyAAA3AAErUAAyUAA3UIJbKwAAMgAANwANK1AAMlAAN1CBbysAADIAADcAASlQAC9QADVQAbBAAAFAf4JlkCkAAC8AADUAAShQAC9QADRQhD8oAAAvAAA0ABktYAA0YAA5YAGwQAABQH+CZZAtAAA0AAA5AAEtYAA0YAA5YIJbLQAANAAAOQANLWAANGAAOWCBby0AADQAADkAAS1gADRgADlgAbBAAAFAf4JlkC0AADQAADkAAS1gADRgADlgglstAAA0AAA5AA0tYAA0YAA5YIFvLQAANAAAOQABKWAAMGAANWABsEAAAUB/gmWQKQAAMAAANQABKWAAMGAANWCCWykAADAAADUADSlgADBgADVggW8pAAAwAAA1AAEpYAAwYAA1YAGwQAABQH+CZZApAAAwAAA1AAEpYAAwYAA1YIJbKQAAMAAANQANKWAAMGAANWCBbykAADAAADUAASRgACtgADBgAbBAAAFAf4JlkCQAACsAADAAASRgACtgADBgglskAAArAAAwAA0kYAArYAAwYIFvJAAAKwAAMAABJGAAK2AAMGABsEAAAUB/gmWQJAAAKwAAMAABJGAAK2AAMGCCWyQAACsAADAADSRgACtgADBggW8kAAArAAAwAAErYAAyYAA3YAGwQAABQH+CZZArAAAyAAA3AAErYAAyYAA3YIJbKwAAMgAANwANK2AAMmAAN2CBbysAADIAADcAAShgAC9gADRgAbBAAAFAf4JlkCgAAC8AADQAAShgAC9gADRgglsoAAAvAAA0AA0oYAAvYAA0YIFvKAAALwAANAABLWAANGAAOWABsEAAAUB/gmWQLQAANAAAOQABLWAANGAAOWCCWy0AADQAADkADS1gADRgADlggW8tAAA0AAA5AAEtYAA0YAA5YAGwQAABQH+CZZAtAAA0AAA5AAEtYAA0YAA5YIJbLQAANAAAOQANLWAANGAAOWCBby0AADQAADkAASlgADBgADVgAbBAAAFAf4JlkCkAADAAADUAASlgADBgADVgglspAAAwAAA1AA0pYAAwYAA1YIFvKQAAMAAANQABKWAAMGAANWABsEAAAUB/gmWQKQAAMAAANQABKWAAMGAANWCCWykAADAAADUADSlgADBgADVggW8pAAAwAAA1AAEkYAArYAAwYAGwQAABQH+CZZAkAAArAAAwAAEkYAArYAAwYIJbJAAAKwAAMAANJGAAK2AAMGCBbyQAACsAADAAASRgACtgADBgAbBAAAFAf4JlkCQAACsAADAAASRgACtgADBgglskAAArAAAwAA0kYAArYAAwYIFvJAAAKwAAMAABK2AAMmAAN2ABsEAAAUB/gmWQKwAAMgAANwABK1UAMlUAN1WCWysAADIAADcADStJADJJADdJgW8rAAAyAAA3AAEoQQAvQQA0QQGwQAABQH+HPZAoAAAvAAA0AAE5MQGwQAABQH+HDZA5ADE3MQGwQAABQH+HDZA3ADE1MQGwQAABQH+DRZA1ABlBMYpXQQBJKzEAMjEANzEBsEAAAUB/nX2QKwAAMgAANwABLTEBsEAAAUB/gWGQLQANNDGBYzQADTkxgWM5AA07MYNHOwAZPDGFKzwAJS0xAbBAAAFAf4FhkC0ADTQxgWM0AA05MIFjOQANOy+DRzsAGTkug0c5ABk0LYFjNAANLSwBsEAAAUB/gWGQLQANNSuBYzUADTkrgWM5AA08KoNHPAAZOSmBYzkADTUogWM1AA0tJ4FjLQANLScBsEAAAUB/gWGQLQANNyaBYzcADTslgWM7AA0+JYUrPgAlOSODRzkAGSEhAC0hADIhADQhADshAbBAAAFAf44dkCEAAC0AADIAADQAADsAYbBAAAH/LwA=';   // user's own .mid, embedded so the page runs from file:// with no server
+function midiReady(){
+  window._midiOK=!!MIDI;
+  if(!MIDI)return;
+  window._midiInfo={notes:MIDI.ev.length,dur:MIDI.dur,bassTrack:MIDI.bassTrack,rubato:MIDI.rubato,src:MIDI.src};
+  if(echoDelay)echoDelay.delayTime.value=MIDI.spb*.75;
+}
+(function loadMidi(){
+  try{
+    if(MIDI_B64&&MIDI_B64[0]!=='@'){
+      const s=atob(MIDI_B64), u=new Uint8Array(s.length);
+      for(let k=0;k<s.length;k++)u[k]=s.charCodeAt(k);
+      MIDI=parseMidi(u); if(MIDI)MIDI.src='embedded';
+    }
+  }catch(e){MIDI=null;}
+  if(MIDI){midiReady();return;}
+  fetch('weight-of-the-world.mid')
+    .then(r=>{if(!r.ok)throw 0;return r.arrayBuffer();})
+    .then(b=>{ MIDI=parseMidi(new Uint8Array(b)); if(MIDI)MIDI.src='fetched'; midiReady(); })
+    .catch(()=>{window._midiOK=false;});
+})();
+function syncSong(t){ if(ac&&MIDI){ songStart=ac.currentTime-(t%MIDI.dur); midiPtr=0; beatPtr=0; } }
+function playMidiNote(e,at){
+  const mv=musicVol; let vol=.2*(.35+.65*e.v), det=0;
+  if(curSection==='broken'){ if(Math.random()<.4)return; det=(Math.random()-.5)*70; }
+  if(curSection==='intro')vol*=.7;
+  if(curSection==='rain')vol*=.75;
+  if(curSection==='outro')vol*=.55;
+  const isBass=MIDI.bassTrack>=0 ? e.tr===MIDI.bassTrack : e.m<52;
+  if(isBass) voice(at,e.m,e.d,vol*(e.m<52?1.05:.7)*mv,{wave:'tri',detune:det});
+  else{
+    voice(at,e.m,e.d,vol*.8*mv,{vib:e.d>.4,echo:curSection==='outro'?.8:.5,detune:det});
+    if(curSection==='full')voice(at,e.m+12,e.d,vol*.2*mv,{wave:'p25',echo:.4});
+  }
+}
+function tickMidi(){
+  const now=ac.currentTime, horizon=now+.4;
+  const S=SECTIONS[curSection]||{};
+  let lp=S.lp||12000; if(curSection==='broken')lp=600+Math.random()*1200;
+  filt.frequency.setTargetAtTime(lp,now,.3);
+  let guard=0;
+  while(guard++<2000){
+    if(midiPtr<MIDI.ev.length){
+      const e=MIDI.ev[midiPtr], at=songStart+e.t;
+      if(at>=horizon)break;
+      midiPtr++;
+      if(at<now-.05)continue;                  // skip already-past events after a seek
+      playMidiNote(e,at);
+    }else{
+      if(songStart+MIDI.dur>=horizon)break;    // wait for loop point
+      songStart+=MIDI.dur; midiPtr=0; beatPtr=0;
+    }
+  }
+  // drums ride the MIDI beat grid, credits only — skipped for rubato performances
+  if(MIDI.rubato)return;
+  const e8=MIDI.spb/2;
+  while(songStart+beatPtr*e8<horizon){
+    const at=songStart+beatPtr*e8, b8=beatPtr; beatPtr++;
+    if(at<now||curSection!=='full')continue;
+    if(b8%8===0)kick(at);
+    if(b8%8===4)noiseHit(at,.13,.12,'bandpass',1800,1.2);
+    noiseHit(at,b8%2===0?.04:.02,.03,'highpass',7000);
+  }
+}
+
+// chords per bar: root(midi oct3-ish), minor?, bass midi
+const CHORDS=[
+ {r:52,min:1,b:40},{r:48,min:0,b:36},{r:55,min:0,b:43},{r:50,min:0,b:38},
+ {r:52,min:1,b:40},{r:48,min:0,b:36},{r:57,min:1,b:45},{r:59,min:0,b:47},
+];
+// melody: [step, midi, dur(steps)] — original, in the spirit of Ending E
+const MELODY=[
+ [0,71,6],[6,67,2],[8,69,4],[12,67,4],
+ [16,64,10],[28,62,2],[30,64,2],
+ [32,71,6],[38,69,2],[40,67,4],[44,69,4],
+ [48,66,12],[60,69,4],
+ [64,71,4],[68,72,4],[72,71,4],[76,69,4],
+ [80,67,6],[86,64,2],[88,67,4],[92,69,4],
+ [96,72,6],[102,71,2],[104,69,4],[108,67,4],
+ [112,66,6],[118,63,2],[120,64,8],
+];
+const MEL={}; for(const e of MELODY)MEL[e[0]]={m:e[1],d:e[2]};
+
+const SECTIONS={
+ none:  {},
+ intro: {arpQ:1, lp:6000, bassSoft:1},
+ verse: {lead:1, bass:1, arp:1, lp:12000},
+ warm:  {lead:1, bass:1, arp:1, pad:1, lp:12000},
+ broken:{lead:1, bass:1, glitch:1, lp:900},
+ rain:  {lead:.8, leadOct:-12, bass:.7, lp:2600},
+ full:  {lead:1, bass:1, arp:1, pad:1, dr:1, cnt:1, lp:14000},
+ outro: {mbox:1, pad:.5, lp:5000},
+};
+let curSection='none';
+
+function pulseWave(d){
+  const n=32, re=new Float32Array(n), im=new Float32Array(n);
+  for(let i=1;i<n;i++)im[i]=(2/(i*Math.PI))*Math.sin(Math.PI*d*i);
+  return ac.createPeriodicWave(re,im);
+}
+function initAudio(){
+  if(ac)return;
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  master=ac.createGain(); master.gain.value=.55; master.connect(ac.destination);
+  filt=ac.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=12000;
+  musicBus=ac.createGain(); musicBus.connect(filt); filt.connect(master);
+  // echo
+  echoIn=ac.createGain(); const dl=echoDelay=ac.createDelay(1);
+  dl.delayTime.value=MIDI?MIDI.spb*.75:STEP*3;
+  const fb=ac.createGain(); fb.gain.value=.34; const wet=ac.createGain(); wet.gain.value=.25;
+  echoIn.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(musicBus);
+  // noise
+  noiseBuf=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);
+  const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  rainGain=ac.createGain(); rainGain.gain.value=0; rainGain.connect(master);
+  const rn=ac.createBufferSource(); rn.buffer=noiseBuf; rn.loop=true;
+  const rf=ac.createBiquadFilter(); rf.type='lowpass'; rf.frequency.value=900;
+  rn.connect(rf); rf.connect(rainGain); rn.start();
+  pw25=pulseWave(.25); pw125=pulseWave(.125);
+  stepI=0; nextT=ac.currentTime+.15; musicOn=true;
+  setInterval(tick,80);
+}
+function env(t,dur,vol,rel,sus){
+  const gn=ac.createGain(); gn.gain.setValueAtTime(.0001,t);
+  gn.gain.linearRampToValueAtTime(vol,t+.012);
+  if(sus===false){ gn.gain.exponentialRampToValueAtTime(.0008,t+dur); }
+  else{ gn.gain.setValueAtTime(vol,t+Math.max(.012,dur-.05));
+        gn.gain.exponentialRampToValueAtTime(.0008,t+dur+(rel||.06)); }
+  return gn;
+}
+function voice(t,midi,dur,vol,o){
+  o=o||{};
+  const osc=ac.createOscillator();
+  if(o.wave==='tri')osc.type='triangle';
+  else if(o.wave==='p25')osc.setPeriodicWave(pw25);
+  else if(o.wave==='p125')osc.setPeriodicWave(pw125);
+  else osc.type='square';
+  osc.frequency.value=nfr(midi);
+  if(o.detune)osc.detune.value=o.detune;
+  if(o.vib){
+    const lfo=ac.createOscillator(),lg=ac.createGain();
+    lfo.frequency.value=5.2; lg.gain.setValueAtTime(0,t);
+    lg.gain.linearRampToValueAtTime(nfr(midi)*.012,t+.3);
+    lfo.connect(lg); lg.connect(osc.frequency); lfo.start(t); lfo.stop(t+dur+.2);
+  }
+  const gn=env(t,dur,vol,o.rel,o.sus);
+  osc.connect(gn); gn.connect(musicBus);
+  if(o.echo){const s=ac.createGain();s.gain.value=o.echo;gn.connect(s);s.connect(echoIn);}
+  osc.start(t); osc.stop(t+dur+(o.rel||.12));
+}
+function noiseHit(t,vol,dur,type,f,q){
+  const src=ac.createBufferSource(); src.buffer=noiseBuf;
+  src.playbackRate.value=.9+Math.random()*.2;
+  const bf=ac.createBiquadFilter(); bf.type=type; bf.frequency.value=f; bf.Q.value=q||.8;
+  const gn=env(t,dur,vol,.02,false);
+  src.connect(bf); bf.connect(gn); gn.connect(master);
+  src.start(t); src.stop(t+dur+.05);
+}
+function kick(t){
+  noiseHit(t,.18,.1,'lowpass',180);
+  const o=ac.createOscillator(); o.type='sine';
+  o.frequency.setValueAtTime(110,t); o.frequency.exponentialRampToValueAtTime(42,t+.13);
+  const gn=env(t,.15,.3,.02,false); o.connect(gn); gn.connect(master); o.start(t); o.stop(t+.2);
+}
+function tick(){
+  if(!musicOn)return;
+  if(MIDI){ if(state==='film')tickMidi(); return; }
+  while(nextT<ac.currentTime+.32){ schedStep(stepI,nextT); stepI++; nextT+=STEP; }
+}
+let barSec='none';
+function schedStep(i,t){
+  const sb=i%16, bar=(i>>4)%8, ch=CHORDS[bar];
+  if(sb===0){
+    barSec=curSection;
+    const S0=SECTIONS[barSec]||{};
+    let lp=S0.lp||12000; if(S0.glitch)lp=600+Math.random()*1200;
+    filt.frequency.setTargetAtTime(lp,t,.25);
+  }
+  const S=SECTIONS[barSec]||{}; const mv=musicVol;
+  // bass
+  if(S.bass){
+    if(sb===0)voice(t,ch.b,STEP*7,.17*S.bass*mv,{wave:'tri'});
+    if(sb===8)voice(t,ch.b,STEP*3.5,.15*S.bass*mv,{wave:'tri'});
+    if(sb===12&&S.dr)voice(t,ch.b+7,STEP*3.5,.13*mv,{wave:'tri'});
+  }
+  if(S.bassSoft&&sb===0)voice(t,ch.b,STEP*15,.09*mv,{wave:'tri'});
+  // arpeggio
+  const arpPat=[0,7,12,ch.min?15:16,12,7,12,7];
+  if(S.arp&&sb%2===0)
+    voice(t,ch.r+12+arpPat[sb/2],STEP*1.7,.055*S.arp*mv,{wave:'p25',echo:.5,sus:false});
+  if(S.arpQ&&sb%4===0)
+    voice(t,ch.r+12+[0,7,12,ch.min?15:16][sb/4],STEP*3.6,.06*mv,{wave:'tri',echo:.7,sus:false});
+  // pad
+  if(S.pad&&sb===0)for(const iv of [0,ch.min?3:4,7])
+    voice(t,ch.r+12+iv,STEP*15.5,.028*S.pad*mv,{wave:'p125',detune:(iv?4:-4)});
+  // lead melody
+  const e=MEL[i%128];
+  if(e&&S.lead){
+    let skip=false,det=0;
+    if(S.glitch){ if(Math.random()<.4)skip=true; det=(Math.random()-.5)*70; }
+    if(!skip)voice(t,e.m+(S.leadOct||0),STEP*e.d*.96,.15*S.lead*mv,
+      {vib:true,echo:.6,detune:det});
+  }
+  if(e&&S.mbox)
+    voice(t,e.m+12,STEP*e.d*1.4,.09*mv,{wave:'p25',echo:.8,sus:false,rel:.3});
+  // counter canon (credits only)
+  const e2=MEL[(i+120)%128];
+  if(e2&&S.cnt)voice(t,e2.m-12,STEP*e2.d*.9,.06*mv,{wave:'p25',echo:.4});
+  // drums
+  if(S.dr){
+    if(sb===0)kick(t);
+    if(sb===8)noiseHit(t,.13,.12,'bandpass',1800,1.2);
+    if(sb===12&&bar%2===1)kick(t);
+    if(sb%2===0)noiseHit(t,sb%4===0?.045:.025,.03,'highpass',7000);
+  }
+  if(S.glitch&&Math.random()<.12)noiseHit(t,.08,.05,'bandpass',300+Math.random()*3000,3);
+}
+function sfxShot(){ if(!ac)return;
+  const t=ac.currentTime,o=ac.createOscillator();o.setPeriodicWave(pw25);
+  o.frequency.setValueAtTime(1500,t);o.frequency.exponentialRampToValueAtTime(700,t+.06);
+  const gn=env(t,.06,.02,.01,false);o.connect(gn);gn.connect(master);o.start(t);o.stop(t+.09);}
+function sfxBoom(v){ if(!ac)return; noiseHit(ac.currentTime,v||.07,.3,'lowpass',700); }
+function sfxChime(){ if(!ac)return; const t=ac.currentTime;
+  voice(t,76,2.5,.08,{wave:'tri',echo:.8,sus:false,rel:.5});
+  voice(t+.4,71,2.2,.06,{wave:'tri',echo:.8,sus:false,rel:.5}); }
+
+/* ================= WORLD ART ================= */
+function genLayer(seed,gY,hMin,hMax){
+  const rnd=mulberry(seed), bs=[]; let x=0;
+  while(x<W*2){
+    const w=14+rnd()*30|0, h=hMin+rnd()*(hMax-hMin)|0;
+    const cols=[]; const nc=Math.max(2,w/4|0);
+    for(let ci=0;ci<nc;ci++)cols.push(h-(rnd()<.4?rnd()*h*.45|0:0));
+    bs.push({x,w,h,cols,veg:rnd()<.5,win:rnd()<.7,gY});
+    x+=w+(2+rnd()*26|0);
+  }
+  return {bs,span:W*2};
+}
+function drawLayer(L,off,col,detail){
+  for(const b of L.bs){
+    let sx=((b.x-off)%L.span+L.span)%L.span; if(sx>W+50)sx-=L.span;
+    if(sx+b.w<0||sx>W)continue;
+    const cw=b.w/b.cols.length;
+    g.fillStyle=col;
+    for(let ci=0;ci<b.cols.length;ci++)
+      g.fillRect(sx+ci*cw|0,b.gY-b.cols[ci],Math.ceil(cw),b.cols[ci]);
+    if(detail){
+      if(b.veg){g.fillStyle=C.olive;
+        for(let ci=0;ci<b.cols.length;ci+=2)g.fillRect(sx+ci*cw|0,b.gY-b.cols[ci]-2,cw+1|0,3);}
+      if(b.win){g.fillStyle='rgba(10,10,14,.85)';
+        for(let wy=b.gY-b.h+6;wy<b.gY-6;wy+=7)for(let wx=3;wx<b.w-3;wx+=6)
+          if(((wx*7+wy*13+b.x)%11)<6)g.fillRect(sx+wx,wy,2,3);}
+    }
+  }
+}
+const farL=genLayer(11,150,30,85), midL=genLayer(77,176,45,120);
+
+function bands(cs,y0,y1){
+  const n=cs.length,hh=(y1-y0)/n;
+  for(let i=0;i<n;i++)R(0,y0+i*hh,W,Math.ceil(hh),cs[i]);
+}
+
+/* ---- characters (procedural, integer px) ---- */
+function drawPod(x,y,t,dark){
+  x|=0;y=(y+Math.sin(t*2.1)*2)|0;
+  const b=dark?C.dgrey:C.lgrey;
+  R(x,y,9,5,b); R(x,y+5,9,2,dark?C.black:C.grey);
+  R(x+1,y-1,7,1,b); R(x+2,y+7,2,3,dark?C.black:C.grey); R(x+5,y+7,2,3,dark?C.black:C.grey);
+  R(x+7,y+1,1,1,C.white);
+}
+function drawMachine(x,y,t,fish){
+  x|=0;y|=0; const r=(Math.sin(t*1.3+x)*1)|0;
+  R(x,y-8,10,8,'#5d5347');          // body
+  R(x+1,y-14,8,6,'#6b6155');        // head
+  R(x+2,y-12,2,2,C.gold); R(x+6,y-12,2,2,C.gold);   // eyes
+  if(Math.sin(t*.7+x)>0.96){R(x+2,y-12,2,2,'#6b6155');R(x+6,y-12,2,2,'#6b6155');}
+  R(x+1,y-2,2,3,'#4a4238'); R(x+7,y-2,2,3,'#4a4238');
+  R(x+4+r,y-15,2,1,'#6b6155');
+  if(fish){ R(x+10,y-9,6,1,'#4a4238'); g.fillStyle='#8a857a';
+    g.fillRect(x+16,y-9,1,11); }
+}
+function drawTwoB(x,y,t,pose){
+  x|=0;y|=0;
+  if(pose==='kneel'){
+    R(x-2,y-2,9,2,C.ink); R(x+3,y-8,4,7,C.ink);           // shin, thigh
+    R(x-3,y-14,8,7,C.ink);                                 // torso+skirt
+    R(x-5,y-19,4,9,C.lgrey&&C.grey);                       // sword sheathed low
+    R(x-6,y-20,9,7,C.hair); R(x-5,y-15,4,2,C.hair);        // head bowed
+    R(x-1,y-17,3,1,C.black);                               // blindfold
+    return;
+  }
+  if(pose==='lie'){
+    R(x-10,y-3,7,4,C.hair);                                // hair
+    R(x-9,y-1,2,1,C.black);
+    R(x-3,y-3,14,3,C.ink); R(x+11,y-2,6,2,C.ink);          // body, legs
+    return;
+  }
+  const ph=t*7.5, s=Math.sin(ph), c=Math.sin(ph+Math.PI);
+  const l1=(s*3)|0, l2=(c*3)|0, lift1=s>0?1:0, lift2=c>0?1:0;
+  // legs (black boots)
+  R(x-1+l1,y-12,3,6,C.ink); R(x-1+l1*1.4,y-6,3,6-lift1,C.ink);
+  R(x-1+l2,y-12,3,6,C.black); R(x-1+l2*1.4,y-6,3,6-lift2,C.black);
+  // skirt
+  const fl=(Math.sin(ph*.5)*1)|0;
+  R(x-4-fl,y-16,10,4,C.ink); R(x-5-fl,y-13,3,2,C.ink);
+  // torso
+  R(x-2,y-21,6,5,C.ink);
+  // arms swing
+  R(x-2+((c*2)|0),y-20,2,6,C.ink); R(x+2+((s*2)|0),y-20,2,6,C.black);
+  // katana on back
+  R(x-5,y-27,2,2,C.grey); R(x-4,y-25,2,3,C.grey); R(x-3,y-22,2,3,C.grey);
+  R(x-6,y-29,2,2,C.white);
+  // head/hair
+  const hb=(Math.sin(ph)*0.6)|0;
+  R(x-3,y-28+hb,9,7,C.hair); R(x-4,y-26+hb,2,4,C.hair); R(x+5,y-24+hb,2,2,C.hair);
+  R(x+1,y-25+hb,5,1,C.black);           // blindfold
+  R(x+4,y-24+hb,2,2,C.skin);            // face
+}
+function draw9S(x,y,t,pose){
+  x|=0;y|=0;
+  const ph=t*7.5+2, s=Math.sin(ph), c=Math.sin(ph+Math.PI);
+  const l1=(s*3)|0,l2=(c*3)|0;
+  R(x-1+l1,y-10,2,4,C.ink); R(x-1+l1,y-6,2,6,C.black);     // boot
+  R(x-1+l2,y-10,2,4,C.skin); R(x-1+l2,y-6,2,6,C.ink);      // skin gap leg
+  R(x-3,y-14,7,4,C.ink);                                    // shorts/coat
+  R(x-2,y-19,5,5,C.ink);
+  R(x+2+((s*2)|0),y-18,2,5,C.ink);
+  R(x-3,y-25,8,6,C.hair); R(x+4,y-21,2,2,C.hair);
+  R(x+1,y-22,4,1,C.black); R(x+3,y-21,2,2,C.skin);
+}
+function drawA2(x,y,t){
+  x|=0;y|=0;
+  R(x-1,y-12,2,12,C.dgrey); R(x+2,y-12,2,12,C.dgrey);       // legs
+  R(x-2,y-20,6,8,C.dgrey);                                   // torso
+  R(x-6,y-24,5,20,C.hair); R(x-7,y-14,3,8,C.hair);           // long hair
+  R(x-2,y-27,8,7,C.hair);                                    // head
+  R(x+3,y-24,3,2,C.skin);
+  const sw=Math.sin(t*.8)*1|0;
+  R(x+6,y-22+sw,2,4,C.grey);                                 // hand/hilt
+  g.fillStyle=C.bone; for(let i=0;i<16;i++)g.fillRect(x+7+(i*.35|0),y-22+sw-i,1,1); // blade up
+}
+function seated(x,y,who,lean){
+  x|=0;y|=0;
+  if(who==='2b'){
+    R(x-4,y-14,9,10,C.ink); R(x-3,y-4,3,8,C.ink); R(x+2,y-4,3,8,C.black);
+    R(x-3,y-19+((lean)|0),7,6,C.hair);
+    R(x-6,y-15,2,6,C.grey);
+  }else{
+    R(x-3+lean,y-12,7,8,C.ink); R(x-2+lean,y-4,2,4,C.skin); R(x+1+lean,y-4,2,4,C.skin);
+    R(x-2+lean,y-1,2,4,C.ink); R(x+1+lean,y-1,2,4,C.ink);
+    R(x-2+lean*2,y-17,6,6,C.hair);
+  }
+}
+
+/* ================= SCENES ================= */
+let state='title', filmT=0, sceneIdx=-1, S_={};   // S_ per-scene scratch
+const stars=[]; { const r=mulberry(5); for(let i=0;i<70;i++)stars.push({x:r()*W|0,y:r()*120|0,p:r()*6}); }
+function drawStars(t,dim){
+  for(const s of stars){ const tw=Math.sin(t*1.5+s.p)>.2?1:.4;
+    g.fillStyle=`rgba(220,215,200,${.5*tw*(dim||1)})`; g.fillRect(s.x,s.y,1,1);}
+}
+function caption(cues,st){
+  for(const q of cues)if(st>=q[0]&&st<q[1]){
+    const line=q[2];
+    R(0,H-26,W,26,'rgba(5,5,8,.55)');
+    if(q[3]){ ctext(q[3],H-22,C.lgrey,1); ctext(line,H-13,C.white,1); }
+    else ctext(line,H-17,C.bone,1);
+  }
+}
+
+const SCN=[
+/* ---- 1 PROLOGUE ---- */
+{ name:'prologue', dur:15, sec:'intro',
+  draw(st){
+    R(0,0,W,H,C.black);
+    const L=[
+      "EVERYTHING THAT LIVES IS DESIGNED TO END.",
+      "WE ARE PERPETUALLY TRAPPED",
+      "IN A NEVER-ENDING SPIRAL OF LIFE AND DEATH.",
+      "",
+      "IS THIS A CURSE?",
+      "OR SOME KIND OF PUNISHMENT?",
+    ];
+    let chars=(st-1)*16|0, y=70;
+    for(const ln of L){
+      if(chars<=0)break;
+      const vis=ln.slice(0,Math.max(0,chars)); chars-=ln.length+6;
+      ctext(vis,y,C.bone,1); y+=13;
+    }
+    if(st>12&&(st*3|0)%2)ctext("...",y+4,C.grey,1);
+  }},
+/* ---- 2 CITY RUINS ---- */
+{ name:'ruins', dur:24, sec:'verse',
+  init(){S_.dust=[];const r=mulberry(9);for(let i=0;i<26;i++)S_.dust.push({x:r()*W,y:r()*H,v:4+r()*8,a:r()*7});
+        S_.birds=[];for(let i=0;i<7;i++)S_.birds.push({o:i*9+r()*6,y:34+r()*22});},
+  draw(st,dt){
+    const pause=st>13&&st<16.5;
+    if(!S_.off)S_.off=0; if(!pause)S_.off+=dt*18;
+    bands(['#8f8a7c','#9a927e','#a49a82','#ada087','#b5a68a'],0,150);
+    R(300,26,16,16,'#d8d2be'); R(302,24,12,20,'#d8d2be'); R(298,28,20,12,'#d8d2be'); // sun
+    drawLayer(farL,S_.off*.15,'#7c766a');
+    drawLayer(midL,S_.off*.45,'#4e4a44',true);
+    bands(['#5a544a','#4e483f','#423d35'],176,H);
+    g.fillStyle='#38332c';
+    for(let i=0;i<40;i++){const rx=(i*53-S_.off*1.0)%(W+40)-20;g.fillRect(rx|0,176-(i%3),8+(i*7)%12,3);}
+    // birds cross during the pause
+    if(st>12&&st<19)for(const b of S_.birds){
+      const bx=-30+((st-12)*62)+b.o, w=Math.sin(st*9+b.o)>0?2:0;
+      g.fillStyle=C.ink; g.fillRect(bx|0,b.y,3,1); g.fillRect(bx+1|0,b.y-1+w/2,1,1);
+    }
+    for(const p of S_.dust){ p.x-=p.v*dt*3; p.y+=Math.sin(st+p.a)*.2;
+      if(p.x<0)p.x=W; g.fillStyle='rgba(200,190,160,.35)'; g.fillRect(p.x|0,p.y|0,1,1);}
+    drawTwoB(150,176,pause?0:st,pause?null:null);
+    drawPod(130,147,st,false);
+    caption([[1,5,"CITY RUINS - 11945 AD"],[14,16.5,"..."]],st);
+  }},
+/* ---- 3 TOGETHER ---- */
+{ name:'together', dur:19, sec:'warm',
+  draw(st){
+    const sink=clamp(st/19,0,1);
+    bands(['#6d6154','#7d6a55','#96794f','#b08a5a','#c9a06b'],0,120);
+    R(0,120,W,30,'#5d5348');
+    const sy=96+sink*14;
+    R(176,sy,20,14,'#e6d3a8'); R(180,sy-3,12,20,'#e6d3a8'); R(172,sy+4,28,7,'#e6d3a8');
+    bands(['#4a4238','#3d372f'],150,168);       // water far
+    // water shimmer
+    for(let i=0;i<30;i++){const wx=(i*29+st*10)%W;g.fillStyle='rgba(230,210,160,.25)';
+      g.fillRect(wx|0,152+(i%12),4,1);}
+    // overpass in foreground
+    R(0,168,W,2,'#2b2731'); R(0,170,W,8,C.ink); R(0,178,W,38,'#131117');
+    for(let i=0;i<10;i++)R(20+i*40,178,6,38,'#0d0c10');
+    R(240,168,60,4,'#0d0c10');                   // broken chunk
+    // machines below by water edge
+    drawMachine(60,166,st,false); drawMachine(96,166,st+3,false);
+    // the two of them
+    const lean=st>9?1:0;
+    seated(180,169,'2b',0); seated(192-lean,169,'9s',-lean);
+    if(st>9){R(186,153,3,2,C.hair);}             // 9S head resting closer
+    caption([
+      [2.5,7.5,'"2B... IF WE COULD STAY LIKE THIS FOREVER..."','9S'],
+      [9.5,13,'"...NINES."','2B'],
+      [14.5,18,"..."],
+    ],st);
+  }},
+/* ---- 4 CORRUPTION ---- */
+{ name:'corruption', dur:11, sec:'broken',
+  draw(st){
+    R(0,0,W,H,'#120507');
+    // red rings from her
+    const cx=192,cy=150;
+    for(let k=0;k<4;k++){
+      const rr=((st*30+k*26)%110); if(rr<2)continue;
+      g.fillStyle=`rgba(213,37,46,${.85-rr/140})`;
+      const n=Math.max(14,rr*.9)|0;
+      for(let a=0;a<n;a++){const th=a/n*6.2832;
+        g.fillRect(cx+Math.cos(th)*rr|0,cy-10+Math.sin(th)*rr*.85|0,1,1);}
+    }
+    // rising virus pixels
+    for(let i=0;i<24;i++){
+      const vy=(H-((st*22+i*31)%H))|0, vx=(cx-60+(i*53)%120)|0;
+      g.fillStyle=i%3?C.red2:C.red; g.fillRect(vx,vy,2,2);
+    }
+    drawTwoB(cx,cy,0,'kneel');
+    if((st*7|0)%3===0){g.fillStyle=C.red;g.fillRect(cx-6,cy-20,9,2);} // hair flicker red
+    if((st*2|0)%3)ctext("LOGIC VIRUS DETECTED",34,C.red,1);
+    caption([[4,8.5,'"IT ALWAYS... ENDS LIKE THIS."','2B']],st);
+    // glitch post: slice shifts
+    for(let i=0;i<5;i++){
+      const y=(Math.random()*H)|0,h=2+Math.random()*8|0,dx=(Math.random()*16-8)|0;
+      g.drawImage(cv,0,y,W,h,dx,y,W,h);
+    }
+    // gentle virus pulse (photosensitivity-safe: small, slow luminance change)
+    const pulse=.05+.04*Math.sin(st*2.5);
+    R(0,0,W,H,`rgba(213,37,46,${pulse})`);
+  }},
+/* ---- 5 RAIN ---- */
+{ name:'rain', dur:17, sec:'rain',
+  init(){S_.drops=[];const r=mulberry(3);for(let i=0;i<130;i++)S_.drops.push({x:r()*W,y:r()*H,v:150+r()*90});
+    if(rainGain)rainGain.gain.setTargetAtTime(.05,ac.currentTime,1);},
+  draw(st,dt){
+    const li=(st>3&&st<3.4)||(st>8.5&&st<8.8)||(st>13&&st<13.3);
+    bands(li?['#33323f','#2c2b37','#26252f']:['#191820','#15141b','#111017'],0,170);
+    drawLayer(farL,40,li?'#1e1d28':'#0e0d12');
+    R(0,170,W,H-170,li?'#1b1a22':'#0b0a0e');
+    drawA2(250,170,st);
+    drawTwoB(160,170,0,'kneel');
+    if(li)R(0,0,W,H,'rgba(190,195,215,.14)');    // soft sheet lightning, no strobe
+    for(const p of S_.drops){ p.y+=p.v*dt; p.x-=p.v*dt*.18;
+      if(p.y>H){p.y=-4;p.x=Math.random()*(W+30);}
+      g.fillStyle='rgba(170,180,200,.4)'; g.fillRect(p.x|0,p.y|0,1,3);}
+    caption([
+      [4.5,8,'"BECOME AS GODS..."','2B'],
+      [10,14,'"...I ALWAYS KNEW IT WOULD BE YOU."','2B'],
+    ],st);
+    if(st>16&&rainGain)rainGain.gain.setTargetAtTime(0,ac.currentTime,.5);
+  }},
+/* ---- 6 ENDING E : CREDITS ---- */
+{ name:'credits', dur:34, sec:'full',
+  init(){
+    const names=[
+      "NIER:AUTOMATA 16-BIT","", "DIRECTOR","YOKO TARO","",
+      "MUSIC","KEIICHI OKABE","", "2B","YUI ISHIKAWA","",
+      "9S","NATSUKI HANAE","", "A2","AYAKA SUWA","",
+      "PODS 042 AND 153","", "SQUARE ENIX","PLATINUMGAMES","",
+      "PIXELS AND CHIPTUNE","CLAUDE","", "AND YOU",
+    ];
+    S_.lines=names.map((t,i)=>({t,y:230+i*13,hp:Math.ceil(t.length*1.6)+3,cut:0,dead:!t}));
+    S_.ship={x:W/2,alive:true,rt:0}; S_.bul=[]; S_.ebul=[]; S_.parts=[]; S_.allies=[];
+    S_.fire=0; S_.deaths=0; S_.msgs=[]; S_.msgT=0;
+    S_.help=["RESCUE OFFER: PLAYER_9S","RESCUE OFFER: YUI.A2","RESCUE OFFER: EMIL_HEAD",
+      "RESCUE OFFER: DEVOLA AND POPOLA","RESCUE OFFER: JACKASS","RESCUE OFFER: ANEMONE",
+      "RESCUE OFFER: PASCAL","RESCUE OFFER: SOMEONE, SOMEWHERE"];
+  },
+  draw(st,dt){
+    R(0,0,W,H,'#060609'); drawStars(st,.7);
+    const sp=S_.ship, allied=st>18;
+    // scroll credits
+    for(const L of S_.lines){ L.y-=dt*10.5; }
+    // ship control
+    if(sp.alive){ sp.x=W/2+Math.sin(st*.9)*90+Math.sin(st*2.3)*24;
+      if(st>6.8&&st<7||st>13.8&&st<14){ // scripted deaths
+        if(sp.alive){sp.alive=false;sp.rt=1.4;S_.deaths++;sfxBoom(.1);
+          for(let i=0;i<26;i++)S_.parts.push({x:sp.x,y:177,vx:Math.random()*80-40,vy:Math.random()*-60,l:.9,c:C.white});}
+      }
+    } else { sp.rt-=dt; if(sp.rt<=0)sp.alive=true; }
+    // allies appear
+    if(allied&&S_.allies.length<4)for(let i=S_.allies.length;i<4;i++)S_.allies.push({o:(i+1)*(i%2?18:-18)});
+    if(allied){ S_.msgT+=dt; if(S_.msgT>1.5&&S_.help.length){S_.msgT=0;S_.msgs.push({t:S_.help.shift(),l:4});} }
+    // firing
+    S_.fire-=dt;
+    if(sp.alive&&S_.fire<=0){ S_.fire=.13;
+      S_.bul.push({x:sp.x,y:172,vy:-150});
+      for(const a of S_.allies)S_.bul.push({x:sp.x+a.o,y:177,vy:-150});
+      if(Math.random()<.4)sfxShot(); }
+    // enemy fire
+    for(const L of S_.lines)if(!L.dead&&L.t&&L.y>10&&L.y<150&&Math.random()<dt*.25)
+      S_.ebul.push({x:W/2+(Math.random()*120-60),y:L.y,vy:55});
+    // bullets
+    for(const b of S_.bul){ b.y+=b.vy*dt;
+      for(const L of S_.lines){ if(L.dead||!L.t)continue;
+        if(Math.abs(b.y-L.y-2)<5&&Math.abs(b.x-W/2)<textW(L.t,1)/2+3){
+          L.hp-=allied?3:1; if((L.hp&3)===0)L.cut++; b.y=-99;
+          S_.parts.push({x:b.x,y:L.y,vx:0,vy:-14,l:.35,c:C.bone});
+          if(L.hp<=0){L.dead=true;sfxBoom(.04);
+            for(let i=0;i<10;i++)S_.parts.push({x:b.x,y:L.y,vx:Math.random()*60-30,vy:Math.random()*-40,l:.7,c:C.lgrey});}
+          break; }}}
+    S_.bul=S_.bul.filter(b=>b.y>-10);
+    for(const b of S_.ebul){ b.y+=b.vy*dt;
+      if(sp.alive&&Math.abs(b.x-sp.x)<4&&Math.abs(b.y-176)<5){
+        sp.alive=false;sp.rt=1.2;S_.deaths++;b.y=999;sfxBoom(.1);
+        for(let i=0;i<26;i++)S_.parts.push({x:sp.x,y:177,vx:Math.random()*80-40,vy:Math.random()*-60,l:.9,c:C.white});}}
+    S_.ebul=S_.ebul.filter(b=>b.y<H+10);
+    // draw credits text
+    for(const L of S_.lines){ if(L.dead||!L.t||L.y<-6||L.y>H+6)continue;
+      const cut=Math.min(L.cut,(L.t.length-1)>>1);
+      const vis=L.t.slice(cut,L.t.length-cut);
+      ctext(vis,L.y|0,L.t===L.t.toUpperCase()&&L.t.length<14?C.white:C.bone,1); }
+    // draw bullets/particles/ships
+    g.fillStyle=C.white; for(const b of S_.bul)g.fillRect(b.x|0,b.y|0,1,3);
+    g.fillStyle=C.red;   for(const b of S_.ebul)g.fillRect(b.x|0,b.y|0,2,2);
+    for(const p of S_.parts){ p.x+=p.vx*dt;p.y+=p.vy*dt;p.l-=dt;
+      if(p.l>0){g.fillStyle=p.c;g.fillRect(p.x|0,p.y|0,1,1);} }
+    S_.parts=S_.parts.filter(p=>p.l>0);
+    function ship(x,y,c){ R(x,y+4,1,2,'#e8a040'); R(x-1,y,3,3,c); R(x-2,y+2,5,2,c); R(x,y-1,1,1,c); }
+    if(sp.alive){ ship(sp.x|0,174,C.white);
+      for(const a of S_.allies)ship((sp.x+a.o)|0,179,C.bone); }
+    // help ticker
+    let my=H-34;
+    for(const m of S_.msgs){ m.l-=dt; if(m.l>0){ drawText(m.t,6,my,`rgba(200,195,180,${clamp(m.l,0,1)})`,1); my-=8; } }
+    S_.msgs=S_.msgs.filter(m=>m.l>0);
+    caption([
+      [1,5,'"PROPOSAL: CEASE THIS POINTLESS STRUGGLE."','POD 153'],
+      [8,12,'"THIS IS THE FATE OF ALL ANDROIDS."','POD 153'],
+      [15,18.5,'"QUERY: DO YOU WISH FOR THEM TO LIVE?"','POD 042'],
+      [19.5,23,'"...YES. EVERYTHING."','POD 042'],
+      [27,32,'"A FUTURE IS NOT GIVEN TO YOU."','POD 042'],
+    ],st);
+  }},
+/* ---- 7 DAWN ---- */
+{ name:'dawn', dur:1e9, sec:'outro',
+  init(){S_.fly=[];const r=mulberry(21);for(let i=0;i<26;i++)
+    S_.fly.push({x:r()*W,y:60+r()*130,p:r()*7,v:2+r()*4});
+    S_.t0=0;},
+  draw(st,dt){
+    const d=clamp(st/22,0,1);            // dawn rises
+    bands([
+      mix('#141420','#3a3550',d), mix('#181826','#5d4a58',d),
+      mix('#1d1c2c','#8a6355',d), mix('#232030','#b98a58',d),
+      mix('#282434','#e0b168',d),
+    ],0,166);
+    drawStars(st,1-d);
+    // sun sliver
+    if(d>.25){ const sh=(d-.25)*16|0;
+      R(184,166-sh,16,sh,mix('#c99a5a','#f0d488',d)); R(180,166-sh+2,24,Math.max(0,sh-2),'rgba(240,212,136,.4)');}
+    // grass field
+    R(0,166,W,H-166,mix('#141810','#25301b',d));
+    for(let i=0;i<96;i++){ const gx=i*4+((i*7)%5);
+      if((i*13)%7<2)continue;
+      const hgt=2+((i*13)%4), sway=Math.sin(st*1.2+i)*1;
+      g.fillStyle=mix((i%3)?'#1d2415':'#2a331d',(i%3)?'#39482a':'#59683a',d);
+      g.fillRect(gx+sway|0,167-hgt,1,hgt+2); }
+    // the three of them, at rest
+    drawTwoB(150,180,0,'lie');
+    R(196,177,6,3,C.hair); R(203,177,11,3,C.ink); R(214,178,5,2,C.skin);   // 9S
+    R(84,177,8,3,C.hair); R(78,178,7,2,C.hair); R(92,177,13,3,C.dgrey);    // A2
+    drawPod(120,128,st,false); drawPod(238,122,st+2,true);
+    // fireflies / petals
+    for(const f of S_.fly){ f.x+=Math.sin(st*.6+f.p)*dt*6; f.y-=f.v*dt*.6;
+      if(f.y<40)f.y=190,f.x=Math.random()*W;
+      const tw=.4+.6*Math.max(0,Math.sin(st*2+f.p));
+      g.fillStyle=`rgba(232,192,105,${tw*(.3+d*.7)})`; g.fillRect(f.x|0,f.y|0,1,1);}
+    caption([
+      [3,9,'"A FUTURE IS NOT GIVEN TO YOU."','POD 042'],
+      [9.5,16,'"IT IS SOMETHING YOU MUST TAKE FOR YOURSELF."','POD 042'],
+    ],st);
+    if(st>18){ ctext("- FIN -",96,`rgba(239,234,222,${clamp((st-18)/2,0,.9)})`,1);
+      if(st>21&&(st*1.2|0)%2)ctext("CLICK TO BEGIN AGAIN",H-10,C.grey,1); }
+    if(st>14)musicVol=Math.max(.35,1-(st-14)*.04);
+  }},
+];
+
+/* ---------------- title ---------------- */
+function drawTitle(t){
+  R(0,0,W,H,C.black);
+  drawStars(t,1);
+  R(300,30,18,18,C.bone); R(303,27,12,24,C.bone); R(297,33,24,12,C.bone);  // moon
+  R(306,34,4,4,'#a8a292'); R(311,42,3,3,'#a8a292');
+  drawLayer(farL,20,'#15131a'); drawLayer(midL,80,'#0f0e13');
+  R(0,176,W,H-176,'#0b0a0e');
+  ctext("NIER:AUTOMATA",78,C.white,2);
+  ctext("16-BIT",104,C.bone,1);
+  R(W/2-60,116,120,1,C.dgrey);
+  if((t*1.6|0)%2)ctext("PRESS START",150,C.lgrey,1);
+  ctext("A TRIBUTE IN PIXELS AND SQUARE WAVES",H-12,'#3f3b45',1);
+}
+
+/* ---------------- main loop ---------------- */
+let last=0;
+try{ localStorage.setItem('nier16_views',
+  (+localStorage.getItem('nier16_views')||1)+1); }catch(e){}
+const qp=new URLSearchParams(location.search);
+if(qp.get('t')!==null){ state='film'; filmT=parseFloat(qp.get('t'))||0; }
+
+function sceneAt(t){
+  let acc=0;
+  for(let i=0;i<SCN.length;i++){ if(t<acc+SCN[i].dur)return[i,t-acc]; acc+=SCN[i].dur; }
+  return[SCN.length-1,t-acc+SCN[SCN.length-1].dur];
+}
+function frame(ts){
+  requestAnimationFrame(frame);
+  const dt=Math.min(.05,(ts-last)/1000)||.016; last=ts;
+  if(state==='title'){ drawTitle(ts/1000); curSection='none'; return; }
+  if(!window._frozen)filmT+=dt;
+  const [i,st]=sceneAt(filmT), sc=SCN[i];
+  if(i!==sceneIdx){ sceneIdx=i; S_={}; if(sc.init)sc.init(); }
+  curSection=sc.sec;
+  sc.draw(st,dt);
+  // fades
+  if(!sc.hardIn&&st<.6)R(0,0,W,H,`rgba(0,0,0,${1-st/.6})`);
+  const rem=sc.dur-st;
+  if(sc.dur<1e8&&rem<.6&&!(SCN[i+1]&&SCN[i+1].hardIn))R(0,0,W,H,`rgba(0,0,0,${1-rem/.6})`);
+  // film grain
+  for(let k=0;k<26;k++){g.fillStyle=Math.random()<.5?'rgba(255,255,255,.04)':'rgba(0,0,0,.06)';
+    g.fillRect(Math.random()*W|0,Math.random()*H|0,1,1);}
+}
+requestAnimationFrame(frame);
+
+addEventListener('pointerdown',()=>{
+  if(state==='title'){
+    initAudio(); if(ac.state==='suspended')ac.resume();
+    state='film'; filmT=0; sceneIdx=-1; musicVol=1; syncSong(0); sfxChime();
+  }else if(SCN[sceneIdx]&&SCN[sceneIdx].name==='dawn'){
+    const st=sceneAt(filmT)[1];
+    if(st>21){ state='title'; sceneIdx=-1; curSection='none'; musicVol=1; }
+  }
+});
+window.seek=(s,fr)=>{state='film';filmT=s;sceneIdx=-1;window._frozen=!!fr;syncSong(s);};   // debug hook
+addEventListener('keydown',e=>{           // debug: → skips scene
+  if(e.key==='ArrowRight'&&state==='film'){
+    let acc=0; for(let i=0;i<=sceneIdx;i++)acc+=SCN[i].dur; filmT=acc;
+  }
+});
+</script>
+</body>
+</html>
