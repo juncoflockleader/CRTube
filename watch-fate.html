@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fate/stay night — 16-BIT · Saber</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{
+    width:min(96vw, calc(96vh * 16 / 9));
+    aspect-ratio:16/9;
+    image-rendering:pixelated;
+    background:#000;
+  }
+  #wrap::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.45) 100%),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+  }
+  #home{position:fixed;top:10px;left:12px;z-index:20;color:#555;
+    font:12px ui-monospace,Menlo,monospace;text-decoration:none;}
+  #home:hover{color:#bbb}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv" width="384" height="216"></canvas></div>
+<a id="home" href="index.html" title="back to CRTube">&larr; CRTube</a>
+<script>
+'use strict';
+const W=384,H=216, cv=document.getElementById('cv'), g=cv.getContext('2d');
+g.imageSmoothingEnabled=false;
+
+/* ---------------- utils ---------------- */
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function hex(c){return[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];}
+function mix(c1,c2,t){const a=hex(c1),b=hex(c2);t=clamp(t,0,1);
+  return `rgb(${(lerp(a[0],b[0],t))|0},${(lerp(a[1],b[1],t))|0},${(lerp(a[2],b[2],t))|0})`;}
+function R(x,y,w,h,c){g.fillStyle=c;g.fillRect(x|0,y|0,w|0,h|0);}
+
+/* ---------------- palette ---------------- */
+const C={
+  black:'#0a0b10', ink:'#151721',
+  night:'#101526', night2:'#0c1120', moon:'#d8dce4',
+  gold:'#e8c050', gold2:'#f0d888', seal:'#c22e3a',
+  saberBlue:'#2c4a9a', saberBlue2:'#1e3470', armor:'#c9ccd4', armor2:'#8a90a0',
+  hairS:'#e8d080', skin:'#e0b490',
+  hairSh:'#d87838', shirou:'#3a5a8c',
+  stone:'#3a3a42', stone2:'#2b2b33',
+  white:'#efeade', bone:'#cdc6b4', grey:'#54504c',
+  avGreen:'#7aa24e', avGreen2:'#5c8a3c', avGold:'#d8c878',
+};
+
+/* ---------------- 3x5 pixel font ---------------- */
+const FONT={
+A:[2,5,7,5,5],B:[6,5,6,5,6],C:[3,4,4,4,3],D:[6,5,5,5,6],E:[7,4,6,4,7],F:[7,4,6,4,4],
+G:[3,4,5,5,3],H:[5,5,7,5,5],I:[7,2,2,2,7],J:[1,1,1,5,2],K:[5,5,6,5,5],L:[4,4,4,4,7],
+M:[7,7,5,5,5],N:[6,5,5,5,5],O:[2,5,5,5,2],P:[6,5,6,4,4],Q:[2,5,5,7,1],R:[6,5,6,5,5],
+S:[3,4,2,1,6],T:[7,2,2,2,2],U:[5,5,5,5,7],V:[5,5,5,5,2],W:[5,5,5,7,7],X:[5,5,2,5,5],
+Y:[5,5,2,2,2],Z:[7,1,2,4,7],
+'0':[7,5,5,5,7],'1':[2,6,2,2,7],'2':[7,1,7,4,7],'3':[7,1,3,1,7],'4':[5,5,7,1,1],
+'5':[7,4,6,1,6],'6':[7,4,7,5,7],'7':[7,1,2,2,2],'8':[7,5,7,5,7],'9':[7,5,7,1,7],
+'.':[0,0,0,0,2],',':[0,0,0,2,4],':':[0,2,0,2,0],'!':[2,2,2,0,2],'?':[7,1,3,0,2],
+"'":[2,4,0,0,0],'-':[0,0,7,0,0],'·':[0,0,2,0,0],'"':[5,5,0,0,0],'/':[1,1,2,4,4],
+'(':[1,2,2,2,1],')':[4,2,2,2,4],
+};
+function drawText(s,x,y,c,sc){
+  sc=sc||1; g.fillStyle=c; s=(''+s).toUpperCase();
+  let cx=x|0;
+  for(const ch of s){
+    if(ch===' '){cx+=4*sc;continue;}
+    const gl=FONT[ch];
+    if(gl){for(let r=0;r<5;r++)for(let b=0;b<3;b++)
+      if(gl[r]>>(2-b)&1)g.fillRect(cx+b*sc,(y|0)+r*sc,sc,sc);}
+    cx+=4*sc;
+  }
+}
+const textW=(s,sc)=>s.length*4*(sc||1)-(sc||1);
+function ctext(s,y,c,sc){drawText(s,(W-textW(s,sc))/2,y,c,sc);}
+
+/* ================= AUDIO ================= */
+let ac=null, master, musicBus, filt, echoIn, echoDelay, windGain, noiseBuf, pw25, pw125;
+let musicOn=false, musicVol=1;
+const nfr=m=>440*Math.pow(2,(m-69)/12);
+let curSection='none';
+const SECTIONS={
+  none:    {},
+  summon:  {song:'pride',lp:6000, vol:.65,echo:.6},
+  days:    {song:'pride',lp:10000,vol:.85},
+  war:     {song:'emiya',lp:13000,vol:1},
+  holy:    {song:'emiya',lp:14000,vol:1.05},
+  farewell:{song:'pride',lp:8000, vol:.8,echo:.6},
+  camlann: {song:'pride',lp:3600, vol:.6,echo:.7},
+  seek:    {song:'pride',lp:9000, vol:.75},
+  avalon:  {song:'pride',lp:10000,vol:.7,echo:.7},
+};
+
+/* ---- dual-MIDI playback (user's own files, embedded) ---- */
+const SONGS={pride:null,emiya:null};
+let activeSong=null;
+function parseMidi(u){
+  const rd32=i=>((u[i]<<24|u[i+1]<<16|u[i+2]<<8|u[i+3])>>>0), rd16=i=>u[i]<<8|u[i+1];
+  if(u[0]!==0x4D||u[1]!==0x54||u[2]!==0x68||u[3]!==0x64)return null;
+  const ntrk=rd16(10), tpq=rd16(12);
+  let i=14; const raw=[], percRaw=[], tempos=[{t:0,us:500000}];
+  for(let tr=0;tr<ntrk;tr++){
+    if(rd32(i)!==0x4D54726B)return null;
+    const len=rd32(i+4); let j=i+8; const end=j+len, on={}; let t=0,run=0;
+    while(j<end){
+      let v=0,b;
+      do{b=u[j++];v=(v<<7)|(b&127);}while(b&128);
+      t+=v;
+      let s=u[j];
+      if(s===0xFF){ const mt=u[j+1]; let ln=0; j+=2;
+        do{b=u[j++];ln=(ln<<7)|(b&127);}while(b&128);
+        if(mt===0x51)tempos.push({t,us:u[j]<<16|u[j+1]<<8|u[j+2]});
+        j+=ln;
+      }else if(s===0xF0||s===0xF7){ let ln=0; j++;
+        do{b=u[j++];ln=(ln<<7)|(b&127);}while(b&128); j+=ln;
+      }else{
+        if(s&0x80){run=s;j++;}else s=run;
+        const hi=s&0xF0, ch=run&0x0F;
+        if(hi===0xC0||hi===0xD0)j+=1;
+        else{ const p1=u[j],p2=u[j+1]; j+=2;
+          if(hi===0x90&&p2>0){
+            if(ch===9)percRaw.push({t,n:p1,v:p2});
+            else (on[p1]=on[p1]||[]).push({t,v:p2,tr});
+          }else if(hi===0x80||(hi===0x90&&p2===0)){
+            if(ch!==9){const q=(on[p1]||[]).shift(); if(q)raw.push({st:q.t,en:t,m:p1,v:q.v,tr});}
+          }
+        }
+      }
+    }
+    i=end;
+  }
+  tempos.sort((a,b)=>a.t-b.t);
+  const seg=[]; let sec=0;
+  for(let k=0;k<tempos.length;k++){
+    if(k>0)sec+=(tempos[k].t-tempos[k-1].t)/tpq*tempos[k-1].us/1e6;
+    seg.push({t:tempos[k].t,sec,us:tempos[k].us});
+  }
+  const toSec=t=>{let s=seg[0];for(const x of seg){if(x.t<=t)s=x;else break;}
+    return s.sec+(t-s.t)/tpq*s.us/1e6;};
+  const ev=raw.map(n=>({t:toSec(n.st),d:Math.max(.09,toSec(n.en)-toSec(n.st)),m:n.m,v:n.v/127,tr:n.tr}))
+    .sort((a,b)=>a.t-b.t);
+  const perc=percRaw.map(n=>({t:toSec(n.t),n:n.n,v:n.v/127})).sort((a,b)=>a.t-b.t);
+  if(!ev.length&&!perc.length)return null;
+  // rank melodic tracks by average pitch → bass / mid / lead voicing
+  const sum={},cnt={};
+  for(const e of ev){sum[e.tr]=(sum[e.tr]||0)+e.m;cnt[e.tr]=(cnt[e.tr]||0)+1;}
+  const trks=Object.keys(cnt).map(Number).sort((a,b)=>sum[a]/cnt[a]-sum[b]/cnt[b]);
+  const roles={};
+  trks.forEach((tr,ix)=>{roles[tr]= trks.length===1?'solo'
+    : ix===0?'bass' : ix===trks.length-1?'lead' : 'mid';});
+  const spb=seg[0].us/1e6;
+  const durEv=ev.reduce((m,e)=>Math.max(m,e.t+e.d),0);
+  const durPc=perc.reduce((m,e)=>Math.max(m,e.t),0);
+  return {ev,perc,dur:Math.max(durEv,durPc)+spb,spb,roles,
+    start:0,ptr:0,percPtr:0};
+}
+const PRIDE_B64='TVRoZAAAAAYAAQACAGBNVHJrAAAALAD/AxRNdXNpY2FsIE5leHVzIEV4cG9ydAD/WAQEAhgIAP9RAwtxsOBh/y8ATVRyawAADM0A/wMRUGFydCAxIEluc3RydW1lbnQAsAAAALAgAADAEwCwCkAAsAdkAJArUACQQ3gwgCsAAJAuUDCALgAAgEMAAJAyUACQQ3gwgDIAAJA3UDCANwAAkDpQYIA6AACAQwAAkCtQAJBDeDCAKwAAkDBQMIAwAACAQwAAkDRQAJBDeDCANAAAkDdQMIA3AACQPFBggDwAAIBDAACQK1AAkEN4MIArAACQLlAwgC4AAIBDAACQMlAAkEN4MIAyAACQN1AwgDcAAJA6UGCAOgAAgEMAAJArUACQQ3gwgCsAAJAwUDCAMAAAgEMAAJA0UACQQ3gwgDQAAJA3UDCANwAAkDxQMIBDAACQSngwgDwAAIBKAACQN1AAkE94MIA3AACATwAAkDpQAJBWeDCAOgAAgFYAAJA+UACQVngwgD4AAJBDUDCAQwAAkEZQMIBWAACQT3gwgEYAAIBPAACQN1AAkE94MIA3AACATwAAkDxQAJBUeDCAPAAAgFQAAJBAUACQVHgwgEAAAJBDUDCAQwAAkEhQMIBUAACQT3gwgEgAAIBPAACQN1AAkE94MIA3AACATwAAkDpQAJBWeDCAOgAAgFYAAJA+UACQVngwgD4AAIBWAACQQ1AAkFl4MIBDAACAWQAAkEZQAJBYeDCAWAAAkFR4MIBGAACAVAAAkDlQAJBWeDCAOQAAkDxQMIA8AACQQFAwgEAAAJBFUDCARQAAkEhQMIBWAACQSngwgEgAAIBKAACQN1AAkE94MIA3AACATwAAkDpQAJBWeDCAOgAAgFYAAJA+UACQVngwgD4AAJBDUDCAQwAAkEZQMIBWAACQT3gwgEYAAIBPAACQN1AAkE94MIA3AACATwAAkDxQAJBUeDCAPAAAgFQAAJBAUACQVHgwgEAAAJBDUDCAQwAAgFQAAJBIUACQT3gwgE8AAJBReDCASAAAgFEAAJAzUACQUngwgDMAAIBSAACQN1AAkFZ4MIA3AACAVgAAkDpQAJBUeDCAOgAAgFQAAJA/UACQUXgwgD8AAIBRAACQMlAAkE94MIAyAACATwAAkDVQAJBNeDCANQAAgE0AAJA3UACQT3gwgDcAAJA6UDCAOgAAkD5QMIA+AACQQ1AwgEMAAIBPAACQQ1AAkE94MIBDAACATwAAkEVQAJBReDCARQAAgFEAAJA6UACQUngwgDoAAIBSAACQPlAAkFZ4MIA+AACAVgAAkEFQAJBWeDCAQQAAgFYAAJBGUACQWXgwgEYAAIBZAACQPFAAkFh4MIA8AACAWAAAkEBQAJBUeDCAQAAAgFQAAJA+UACQVngwgD4AAJBBUDCAQQAAkEVQMIBFAACQSlAwgEoAAJBNUDCAVgAAkFZ4MIBNAACAVgAAkDdQAJBbeDCANwAAgFsAAJA6UACQXngwgDoAAIBeAACQPlAAkF14MIA+AACAXQAAkENQAJBbeDCAQwAAgFsAAJA5UACQWXgwgDkAAIBZAACQPFAAkFR4MIA8AACAVAAAkDpQAJBWeDCAOgAAkD5QMIA+AACQQVAwgEEAAJBGUDCARgAAgFYAAJBKUACQVHgwgFQAAJBWeDCASgAAgFYAAJA8UACQV3gwgDwAAIBXAACQP1AAkFd4MIA/AACAVwAAkENQAJBXeDCAQwAAgFcAAJBIUACQWXgwgEgAAIBZAACQPlAAkFZ4MIA+AACAVgAAkEFQAJBUeDCAQQAAgFQAAJA3UACQVngwgDcAAJA6UDCAOgAAgFYAAJA+UACQVHgwgD4AAJBDUDCAQwAAgFQAAJBDUACQUngwgEMAAIBSAACQQVAAkFF4MIBBAACAUQAAkDNQAJBPeDCAMwAAgE8AAJA3UACQT3gwgDcAAIBPAACQOlAAkE94MIA6AACATwAAkD9QAJBUeDCAPwAAgFQAAJAyUACQUXgwgDIAAIBRAACQNVAAkE14MIA1AACATQAAkCtQAJBPeDCAKwAAgE8AAJAuUACQSngwgC4AAIBKAACQMlAAkFF4MIAyAACAUQAAkDdQAJBSeDCANwAAgFIAAJA6UACQVngwgFYAAJBZeDCAOgAAgFkAAJArUACQT3gMgE8AAJBUeCSAKwAAkDBQMIAwAACAVAAAkDRQAJBUeDCANAAAkDdQMIA3AACAVAAAkDxQAJBPeGCAPAAAgE8AAJArUACQUXgMgFEAAJBSeCSAKwAAgFIAAJAuUACQSngwgC4AAIBKAACQMlAAkFF4MIAyAACAUQAAkDdQAJBSeDCANwAAgFIAAJA6UACQVngwgFYAAJBZeDCAOgAAgFkAAJArUACQT3gMgE8AAJBUeCSAKwAAkDBQMIAwAACAVAAAkDRQAJBUeDCANAAAkDdQMIA3AACQPFAwgFQAAJA+eDCAPAAAgD4AAJArUACQQ3gwgEMAAJBKeDCAKwAAgEoAAJAuUACQSnhggC4AAJAyUDCASgAAkEN4MIAyAACAQwAAkCtQAJBDeDCAQwAAkEh4MIArAACASAAAkDBQAJBIeGCAMAAAkDRQMIBIAACQQ3gwgDQAAIBDAACQK1AAkEN4MIBDAACQSngwgCsAAIBKAACQLlAAkEp4MIBKAACQTXgwgC4AAIBNAACQMlAAkEx4MIBMAACQSHgwgDIAAIBIAACQK1AAkEp4YIArAACQMFBggDAAAJA0UDCASgAAkD54MIA0AACAPgAAkCtQAJBDeDCAKwAAgEMAAJAuUACQSngwgC4AAIBKAACQLlAAkEp4MIAuAACQN1AwgDcAAJAyUDCASgAAkEN4MIAyAACAQwAAkCtQAJBDeDCAKwAAgEMAAJAwUACQSHgwgDAAAIBIAACQMFAAkEh4MIAwAACQN1AwgDcAAIBIAACQNFAAkEN4MIBDAACQRXgwgDQAAIBFAACQJ1AAkEZ4MIAnAACARgAAkCtQAJBKeDCAKwAAgEoAAJArUACQSHgwgCsAAIBIAACQJ1AAkEV4MIAnAACARQAAkCZQAJBDeDCAJgAAgEMAAJApUACQQXgwgCkAAIBBAACQK1AAkEN4MIArAACQLlAwgC4AAJAuUDCALgAAkDdQMIA3AACAQwAAkDJQAJBDeDCAQwAAkEV4MIAyAACARQAAkC5QAJBGeDCALgAAgEYAAJAyUACQSngwgDIAAIBKAACQMlAAkEp4MIAyAACASgAAkDpQAJBNeDCAOgAAgE0AAJAwUACQTHgwgDAAAIBMAACQNFAAkEh4MIA0AACASAAAkClQAJBKeDCAKQAAkC1QMIAtAACQLVAwgC0AAJA1UDCANQAAkDJQMIBKAACQSngwgDIAAIBKAACQLlAAkE94MIAuAACATwAAkC5QAJBSeDCALgAAgFIAAJAyUACQUXgwgDIAAIBRAACQK1AAkE94MIArAACATwAAkC1QAJBNeDCALQAAgE0AAJAwUACQSHgwgDAAAIBIAACQKVAAkEp4MIApAACQMlAwgDIAAJAuUDCALgAAkDpQMIA6AACASgAAkDVQAJBIeDCASAAAkEp4MIA1AACASgAAkDBQAJBLeDCAMAAAgEsAAJAzUACQS3gwgDMAAIBLAACQMFAAkEt4MIAwAACASwAAkDxQAJBNeDCAPAAAgE0AAJAtUACQSngwgC0AAIBKAACQNVAAkEh4MIA1AACASAAAkCtQAJBKeDCAKwAAkC5QMIAuAACASgAAkC5QAJBIeDCALgAAkDdQMIA3AACASAAAkC5QAJBGeDCALgAAgEYAAJA1UACQRXgwgDUAAIBFAACQJ1AAkEN4MIAnAACAQwAAkCtQAJBDeDCAKwAAgEMAAJAuUACQQ3gwgC4AAIBDAACQM1AAkEh4MIAzAACASAAAkCZQAJBFeDCAJgAAgEUAAJApUACQQXgwgCkAAIBBAACQK1AAkEN4MIArAACAQwAAkC5QAJA+eDCALgAAgD4AAJAyUACQRXgwgDIAAIBFAACQN1AAkEZ4MIA3AACARgAAkDpQAJBKeDCASgAAkE14MIA6AACATQAAkCtQAJBDeAyAQwAAkEh4JIArAACQMFAwgDAAAIBIAACQNFAAkEh4MIA0AACQN1AwgDcAAIBIAACQPFAAkEN4YIA8AACAQwAAkCtQAJBFeAyARQAAkEZ4JIArAACARgAAkC5QAJBDeDCALgAAgEMAAJAyUACQRXgwgDIAAIBFAACQN1AAkEZ4MIA3AACARgAAkDpQAJBKeDCASgAAkE14MIA6AACATQAAkCtQAJBDeAyAQwAAkEh4JIArAACQMFAwgDAAAIBIAACQNFAAkEh4MIA0AACQN1AwgDcAAIBIAACQPFAAkEN4YIA8AACAQwAAkCtQAJBBeAyAQQAAkEN4DIBDAACQSniCCIArAACASgAB/y8A';
+const EMIYA_B64='TVRoZAAAAAYAAQAGAYBNVHJrAAAB9QD/WAQEAhgIAP9RAwYvnQD/Aw44LUJpdCBTYXd0b290aADAUQCQJzIAkC4yjACALgAAgCcAAJAvMgCQJzKMAIAnAACALwAAkCkyAJAxMowAgDEAAIApAACQJzIAkCwyhgCAJwAAkCUyhgCAJQAAgCwAAJAnMgCQLjIAkD4AAJAbAGCAGwAAgD4AAJBFAGCARQBgkEUAYIBFAGCQPgBggD4AAJBFAGCARQBgkEUAYIBFAIUgkD4AYIA+AACQRQBggEUAYJBFAGCARQBgkD4AYIA+AACQRQBggEUAYJBFAGCARQCFIIAuAACAJwAAkC8yAJAnMgCQPgBggD4AAJBFAGCARQBgkEUAYIBFAGCQPgBggD4AAJBFAGCARQBgkEUAYIBFAJEggCcAAIAvAACQKTIAkDEymACAMQAAgCkAAJAnMgCQLDKMAIAnAACQJTKMAIAlAACALAAAkCcyAJAuMpgAgC4AAIAnAACQLzIAkCcymACAJwAAgC8AAJAxMgCQKTKYAIApAACAMQAAkCcyAJAsMowAgCcAAJAlMowAgCUAAIAsAACQJzIAkC4ymACALgAAgCcAAJAvMgCQJzKYAIAnAACALwAAkDEyAJApMpgAgCkAAIAxAACQJzIAkCwyjACAJwAAkCUyjACAJQAAgCwAAP8vAE1UcmsAABY3AP8DDTIwMTMgRHJ1bSBLaXQAyQCvIJkkMjCZJjIwiSQAAJkkMjCJJgAAmSYyAJkqSwCZKUsAmSoiMIkmAACJJAAwiSoAAIkpAACJKgCBQJkqIgCZKSIAmSoiAJkpImCJKQAAiSoAAIkpAACJKgBgmSoiAJkpIgCZKiJgiSoAAIkpAACJKgAAmSYKYIkmAGCZKksAmSlLAJkqImCJKgAAiSkAAIkqAIFAmSoiAJkpIgCZKiIAmSkiYIkpAACJKgAAiSkAAIkqAGCZKiIAmSkiAJkqImCJKgAAiSkAAIkqAIFAmSpLAJkpSwCZKiJgiSoAAIkpAACJKgCBQJkqIgCZKSIAmSoiAJkpImCJKQAAiSoAAIkpAACJKgBgmSoiAJkpIgCZKiJgiSoAAIkpAACJKgCBQJkqSwCZKUsAmSoiYIkqAACJKQAAiSoAgUCZKiIAmSkiAJkqIgCZKSJgiSkAAIkqAACJKQAAiSoAYJkqIgCZKSIAmSoiYIkqAACJKQAAiSoAgUCZKksAmSlLAJkqImCJKgAAiSkAAIkqAIFAmSoiAJkpIgCZKiIAmSkiYIkpAACJKgAAiSkAAIkqAGCZKiIAmSkiAJkqImCJKgAAiSkAAIkqAIFAmSpLAJkpSwCZKiJgiSoAAIkpAACJKgCBQJkqIgCZKSIAmSoiAJkpImCJKQAAiSoAAIkpAACJKgBgmSoiAJkpIgCZKiJgiSoAAIkpAACJKgCBQJkqSwCZKUsAmSoiYIkqAACJKQAAiSoAgUCZKiIAmSkiAJkqIgCZKSJgiSkAAIkqAACJKQAAiSoAYJkqIgCZKSIAmSoiYIkqAACJKQAAiSoAgUCZKksAmSlLAJkqImCJKgAAiSkAAIkqAIFAmSoiAJkpIgCZKiIAmSkiYIkpAACJKgAAiSkAAIkqAGCZKiIAmSkiAJkqImCJKgAAiSkAAIkqAIFAmSpLAJkpSwCZKiJgiSoAAIkpAACJKgCBQJkqIgCZKSIAmSoiAJkpImCJKQAAiSoAAIkpAACJKgBgmSoiAJkpIgCZKiJgiSoAAIkpAACJKgCBQJkqSwCZKUsAmSoiYIkqAACJKQAAiSoAgUCZKiIAmSkiAJkqIgCZKSJgiSkAAIkqAACJKQAAiSoAYJkqIgCZKSIAmSoiYIkqAACJKQAAiSoAgUCZKksAmSlLAJkqImCJKgAAiSkAAIkqAIFAmSoiAJkpIgCZKiIAmSkiYIkpAACJKgAAiSkAAIkqAGCZKiIAmSkiAJkqImCJKgAAiSkAAIkqAIFAmSpLAJkpSwCZKiJgiSoAAIkpAACJKgCBQJkqIgCZKSIAmSoiAJkpImCJKQAAiSoAAIkpAACJKgBgmSoiAJkpIgCZKiJgiSoAAIkpAACJKgCBQJkqSwCZKUsAmSoiYIkqAACJKQAAiSoAgUCZKiIAmSkiAJkqIgCZKSJgiSkAAIkqAACJKQAAiSoAYJkqIgCZKSIAmSoiYIkqAACJKQAAiSoAgUCZKksAmSlLAJkqImCJKgAAiSkAAIkqAIFAmSoiAJkpIgCZKiIAmSkiYIkpAACJKgAAiSkAAIkqAGCZKiIAmSkiAJkqImCJKgAAiSkAAIkqAIFAmSpLAJkpSwCZKiJgiSoAAIkpAACJKgCBQJkqIgCZKSIAmSoiAJkpImCJKQAAiSoAAIkpAACJKgBgmSoiAJkpIgCZKiJgiSoAAIkpAACJKgCBQJkqSwCZKUsAmSoiYIkqAACJKQAAiSoAgUCZKiIAmSkiAJkqIgCZKSJgiSkAAIkqAACJKQAAiSoAYJkqIgCZKSIAmSoiMJkkMjCJKgAAiSkAAIkqADCJJABgmSQyAJlGMgCZOTIwmSpLAJkpSwCZKiIwiTkAAIlGAACJJAAwiSoAAIkpAACJKgAwmS4yAJkqMmCJKgAAiS4AMJkqIgCZKSIAmSoiAJkpIjCZJDIAmSYyMIkpAACJKgAAiSkAAIkqADCJJgAAiSQAMJkqIgCZKSIAmSoiMJkuMgCZKjIwiSoAAIkpAACJKgAwiSoAAIkuAGCZJDIwmSpLAJkpSwCZKiIwiSQAMIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZLjIAmSoyAJkqMjCJKgAAiSkAAIkqADCJKgAAiSoAAIkuAGCZJDIwmSpLAJkpSwCZKiIwiSQAMIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZKjIAmS4yMIkqAACJKQAAiSoAMIkuAACJKgBgmSQyMJkqSwCZKUsAmSoiMIkkADCJKgAAiSkAAIkqADCZLjIAmSoyYIkqAACJLgAwmSoiAJkpIgCZKiIAmSkiMJkkMgCZJjIwiSkAAIkqAACJKQAAiSoAMIkmAACJJAAwmSoiAJkpIgCZKiIwmSoyAJkuMjCJKgAAiSkAAIkqADCJLgAAiSoAYJkkMjCZKksAmSlLAJkqIjCJJAAwiSoAAIkpAACJKgAwmS4yAJkqMmCJKgAAiS4AMJkqIgCZKSIAmSoiAJkpIjCZJDIAmSYyMIkpAACJKgAAiSkAAIkqADCJJgAAiSQAMJkqIgCZKSIAmSoiMJkuMgCZKjIwiSoAAIkpAACJKgAwiSoAAIkuAGCZJDIwmSpLAJkpSwCZKiIwiSQAMIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZLjIAmSoyAJkqMjCJKgAAiSkAAIkqADCJKgAAiSoAAIkuAGCZJDIwmSpLAJkpSwCZKiIwiSQAMIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZKjIAmS4yMIkqAACJKQAAiSoAMIkuAACJKgBgmSQyMJkqSwCZKUsAmSoiMIkkADCJKgAAiSkAAIkqADCZLjIAmSoyYIkqAACJLgAwmSoiAJkpIgCZKiIAmSkiMJkkMgCZJjIwiSkAAIkqAACJKQAAiSoAMIkmAACJJAAwmSoiAJkpIgCZKiIwmSoyAJkuMjCJKgAAiSkAAIkqADCJLgAAiSoAYJkkMjCZKksAmSlLAJkqIjCJJAAwiSoAAIkpAACJKgAwmS4yAJkqMmCJKgAAiS4AMJkqIgCZKSIAmSoiAJkpIjCZJDIAmSYyMIkpAACJKgAAiSkAAIkqADCJJgAAiSQAMJkqIgCZKSIAmSoiMJkuMgCZKjIwiSoAAIkpAACJKgAwiSoAAIkuAGCZJDIwmSpLAJkpSwCZKiIwiSQAMIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZLjIAmSoyAJkqMjCJKgAAiSkAAIkqADCJKgAAiSoAAIkuAGCZJDIwmSpLAJkpSwCZKiIwiSQAMIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZKjIAmS4yMIkqAACJKQAAiSoAMIkuAACJKgBgmSQyMJkqSwCZKUsAmSoiMIkkADCJKgAAiSkAAIkqADCZLjIAmSoyYIkqAACJLgAwmSoiAJkpIgCZKiIAmSkiMJkkMgCZJjIwiSkAAIkqAACJKQAAiSoAMIkmAACJJAAwmSoiAJkpIgCZKiIwmSoyAJkuMjCJKgAAiSkAAIkqADCJLgAAiSoAYJkkMjCZKksAmSlLAJkqIjCJJAAwiSoAAIkpAACJKgAwmS4yAJkqMmCJKgAAiS4AMJkqIgCZKSIAmSoiAJkpIjCZJDIAmSYyMIkpAACJKgAAiSkAAIkqADCJJgAAiSQAMJkqIgCZKSIAmSoiMJkuMgCZKjIwiSoAAIkpAACJKgAwiSoAAIkuAGCZJDIwmSpLAJkpSwCZKiIwiSQAMIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZLjIAmSoyAJkqMjCJKgAAiSkAAIkqADCJKgAAiSoAAIkuAGCZKzJgiSsAAJkrMmCJKwAAmSsyYIkrAGCZKzJgiSsAAJkrMmCJKwAAmSsyYIkrAACZKzJgiSsAYJkrMmCJKwAAmSsyYIkrAGCZKzIAmSYsYIkmAACJKwAAmSYsYIkmAACZKzIAmSYsYIkmAACJKwAAmSYsYIkmAACZJDIAmTEyAJk5MjCZKiIAmSkiAJkqIgCZKSIwiTkAAIkxAACJJAAwiSkAAIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZLjIAmSoyMIkqAACJKQAAiSoAMIkqAACJLgBgmSQyMJkqSwCZKUsAmSoiMIkkADCJKgAAiSkAAIkqADCZLjIAmSoyYIkqAACJLgAwmSoiAJkpIgCZKiIAmSkiMJkkMgCZJjIwiSkAAIkqAACJKQAAiSoAMIkmAACJJAAwmSoiAJkpIgCZKiIwmS4yAJkqMgCZKjIwiSoAAIkpAACJKgAwiSoAAIkqAACJLgBgmSQyMJkqSwCZKUsAmSoiMIkkADCJKgAAiSkAAIkqADCZLjIAmSoyYIkqAACJLgAwmSoiAJkpIgCZKiIAmSkiMJkkMgCZJjIwiSkAAIkqAACJKQAAiSoAMIkmAACJJAAwmSoiAJkpIgCZKiIwmSoyAJkuMjCJKgAAiSkAAIkqADCJLgAAiSoAYJkkMjCZKksAmSlLAJkqIjCJJAAwiSoAAIkpAACJKgAwmS4yAJkqMmCJKgAAiS4AMJkqIgCZKSIAmSoiAJkpIjCZJDIAmSYyMIkpAACJKgAAiSkAAIkqADCJJgAAiSQAMJkqIgCZKSIAmSoiMJkqMgCZLjIwiSoAAIkpAACJKgAwiS4AAIkqAGCZJDIwmSpLAJkpSwCZKiIwiSQAMIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZLjIAmSoyMIkqAACJKQAAiSoAMIkqAACJLgBgmSQyMJkqSwCZKUsAmSoiMIkkADCJKgAAiSkAAIkqADCZLjIAmSoyYIkqAACJLgAwmSoiAJkpIgCZKiIAmSkiMJkkMgCZJjIwiSkAAIkqAACJKQAAiSoAMIkmAACJJAAwmSoiAJkpIgCZKiIwmS4yAJkqMgCZKjIwiSoAAIkpAACJKgAwiSoAAIkqAACJLgBgmSQyMJkqSwCZKUsAmSoiMIkkADCJKgAAiSkAAIkqADCZLjIAmSoyYIkqAACJLgAwmSoiAJkpIgCZKiIAmSkiMJkkMgCZJjIwiSkAAIkqAACJKQAAiSoAMIkmAACJJAAwmSoiAJkpIgCZKiIwmSoyAJkuMjCJKgAAiSkAAIkqADCJLgAAiSoAYJkkMjCZKksAmSlLAJkqIjCJJAAwiSoAAIkpAACJKgAwmS4yAJkqMmCJKgAAiS4AMJkqIgCZKSIAmSoiAJkpIjCZJDIAmSYyMIkpAACJKgAAiSkAAIkqADCJJgAAiSQAMJkqIgCZKSIAmSoiMJkqMgCZLjIwiSoAAIkpAACJKgAwiS4AAIkqAGCZJDIwmSpLAJkpSwCZKiIwiSQAMIkqAACJKQAAiSoAMJkuMgCZKjJgiSoAAIkuADCZKiIAmSkiAJkqIgCZKSIwmSQyAJkmMjCJKQAAiSoAAIkpAACJKgAwiSYAAIkkADCZKiIAmSkiAJkqIjCZLjIAmSoyMIkqAACJKQAAiSoAMIkqAACJLgBgmSQyMJkqSwCZKUsAmSoiMIkkADCJKgAAiSkAAIkqADCZLjIAmSoyYIkqAACJLgAwmSoiAJkpIgCZKiIAmSkiMJkkMgCZJjIwiSkAAIkqAACJKQAAiSoAMIkmAACJJAAwmSoiAJkpIgCZKiIwmS4yAJkqMgCZKjIwiSoAAIkpAACJKgAwiSoAAIkqAACJLgBgmSQyMJkqSwCZ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iS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCNQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwCBQJkrSwCZKUsAmS0iYIktAACJKQAAiSsAgUCZLSIAmSkiAJkrIgCZKSJgiSkAAIkrAACJKQAAiS0AYJkrIgCZKSIAmS0iYIktAACJKQAAiSsAgUCZK0sAmSlLAJktImCJLQAAiSkAAIkrAIFAmS0iAJkpIgCZKyIAmSkiYIkpAACJKwAAiSkAAIktAGCZKyIAmSkiAJktImCJLQAAiSkAAIkrAIFAmStLAJkpSwCZLSJgiS0AAIkpAACJKwCBQJktIgCZKSIAmSsiAJkpImCJKQAAiSsAAIkpAACJLQBgmSsiAJkpIgCZLSJgiS0AAIkpAACJKwAA/y8A';
+function b64bytes(b64){
+  const s=atob(b64), u=new Uint8Array(s.length);
+  for(let k=0;k<s.length;k++)u[k]=s.charCodeAt(k);
+  return u;
+}
+(function loadSongs(){
+  try{ if(PRIDE_B64[0]!=='@')SONGS.pride=parseMidi(b64bytes(PRIDE_B64)); }catch(e){}
+  try{ if(EMIYA_B64[0]!=='@')SONGS.emiya=parseMidi(b64bytes(EMIYA_B64)); }catch(e){}
+  window._midiOK=!!(SONGS.pride||SONGS.emiya);
+  window._midiInfo={
+    pride:SONGS.pride?{notes:SONGS.pride.ev.length,dur:SONGS.pride.dur}:null,
+    emiya:SONGS.emiya?{notes:SONGS.emiya.ev.length,perc:SONGS.emiya.perc.length,dur:SONGS.emiya.dur}:null,
+  };
+})();
+
+function pulseWave(d){
+  const n=32, re=new Float32Array(n), im=new Float32Array(n);
+  for(let i=1;i<n;i++)im[i]=(2/(i*Math.PI))*Math.sin(Math.PI*d*i);
+  return ac.createPeriodicWave(re,im);
+}
+function initAudio(){
+  if(ac)return;
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  master=ac.createGain(); master.gain.value=.52; master.connect(ac.destination);
+  filt=ac.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=12000;
+  musicBus=ac.createGain(); musicBus.connect(filt); filt.connect(master);
+  echoIn=ac.createGain(); const dl=echoDelay=ac.createDelay(1); dl.delayTime.value=.42;
+  const fb=ac.createGain(); fb.gain.value=.3; const wet=ac.createGain(); wet.gain.value=.22;
+  echoIn.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(musicBus);
+  noiseBuf=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);
+  const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  windGain=ac.createGain(); windGain.gain.value=0; windGain.connect(master);
+  const wn=ac.createBufferSource(); wn.buffer=noiseBuf; wn.loop=true;
+  const wf=ac.createBiquadFilter(); wf.type='bandpass'; wf.frequency.value=520; wf.Q.value=.5;
+  wn.connect(wf); wf.connect(windGain); wn.start();
+  const lfo=ac.createOscillator(), lg=ac.createGain();
+  lfo.frequency.value=.08; lg.gain.value=.01;
+  lfo.connect(lg); lg.connect(windGain.gain); lfo.start();
+  pw25=pulseWave(.25); pw125=pulseWave(.125);
+  musicOn=true;
+  setInterval(tick,80);
+}
+function env(t,dur,vol,rel,sus){
+  const gn=ac.createGain(); gn.gain.setValueAtTime(.0001,t);
+  gn.gain.linearRampToValueAtTime(vol,t+.012);
+  if(sus===false){ gn.gain.exponentialRampToValueAtTime(.0008,t+dur); }
+  else{ gn.gain.setValueAtTime(vol,t+Math.max(.012,dur-.05));
+        gn.gain.exponentialRampToValueAtTime(.0008,t+dur+(rel||.06)); }
+  return gn;
+}
+function voice(t,midi,dur,vol,o){
+  o=o||{};
+  const osc=ac.createOscillator();
+  if(o.wave==='tri')osc.type='triangle';
+  else if(o.wave==='p25')osc.setPeriodicWave(pw25);
+  else if(o.wave==='p125')osc.setPeriodicWave(pw125);
+  else osc.type='square';
+  osc.frequency.value=nfr(midi);
+  if(o.detune)osc.detune.value=o.detune;
+  if(o.vib){
+    const lfo=ac.createOscillator(),lg=ac.createGain();
+    lfo.frequency.value=5.2; lg.gain.setValueAtTime(0,t);
+    lg.gain.linearRampToValueAtTime(nfr(midi)*.01,t+.25);
+    lfo.connect(lg); lg.connect(osc.frequency); lfo.start(t); lfo.stop(t+dur+.2);
+  }
+  const gn=env(t,dur,vol,o.rel,o.sus);
+  osc.connect(gn); gn.connect(musicBus);
+  if(o.echo){const s=ac.createGain();s.gain.value=o.echo;gn.connect(s);s.connect(echoIn);}
+  osc.start(t); osc.stop(t+dur+(o.rel||.12));
+}
+function noiseHit(t,vol,dur,type,f,q){
+  const src=ac.createBufferSource(); src.buffer=noiseBuf;
+  src.playbackRate.value=.9+Math.random()*.2;
+  const bf=ac.createBiquadFilter(); bf.type=type; bf.frequency.value=f; bf.Q.value=q||.8;
+  const gn=env(t,dur,vol,.02,false);
+  src.connect(bf); bf.connect(gn); gn.connect(master);
+  src.start(t); src.stop(t+dur+.05);
+}
+function kick(t,v){
+  noiseHit(t,.1*v,.07,'lowpass',180);
+  const o=ac.createOscillator(); o.type='sine';
+  o.frequency.setValueAtTime(115,t); o.frequency.exponentialRampToValueAtTime(44,t+.1);
+  const gn=env(t,.12,.24*v,.02,false); o.connect(gn); gn.connect(master); o.start(t); o.stop(t+.17);
+}
+function percHit(t,n,v){
+  if(n===35||n===36)kick(t,v);
+  else if(n===38||n===40||n===37)noiseHit(t,.12*v,.1,'bandpass',1900,1.2);
+  else if(n===42||n===44)noiseHit(t,.045*v,.03,'highpass',7500);
+  else if(n===46)noiseHit(t,.05*v,.12,'highpass',6500);
+  else if(n===49||n===52||n===55||n===57)noiseHit(t,.06*v,.35,'highpass',4800);
+  else if(n>=41&&n<=48)noiseHit(t,.09*v,.09,'lowpass',420);
+  else noiseHit(t,.03*v,.03,'highpass',8000);
+}
+function playMidiNote(song,e,at){
+  const S=SECTIONS[curSection]||{}; const mv=musicVol*(S.vol||1);
+  const vol=.19*(.35+.65*e.v);
+  let role=song.roles[e.tr]||'solo';
+  if(role==='solo')role=e.m<52?'bass':'lead';
+  let m=e.m;
+  if(role==='bass'){
+    if(m<34)m+=12;
+    voice(at,m,e.d,vol*1.0*mv,{wave:'tri'});
+  }else if(role==='mid'){
+    voice(at,m,e.d,vol*.5*mv,{wave:'p25'});
+  }else{
+    voice(at,m,e.d,vol*.75*mv,{vib:e.d>.5,echo:S.echo||.4});
+  }
+}
+function switchSong(key){
+  const s=SONGS[key]; if(!s)return;
+  activeSong=key;
+  const now=ac.currentTime;
+  musicBus.gain.setTargetAtTime(.12,now,.12);          // gentle hand-off dip
+  musicBus.gain.setTargetAtTime(1,now+.35,.2);
+  s.start=now+.3; s.ptr=0; s.percPtr=0;
+}
+function tickMidi(){
+  const now=ac.currentTime, horizon=now+.4;
+  const S=SECTIONS[curSection]||{};
+  const want=S.song&&SONGS[S.song]?S.song:(SONGS.pride?'pride':'emiya');
+  if(want!==activeSong)switchSong(want);
+  const song=SONGS[activeSong]; if(!song)return;
+  filt.frequency.setTargetAtTime(S.lp||12000,now,.3);
+  let guard=0;
+  while(guard++<4000){
+    if(song.ptr<song.ev.length){
+      const e=song.ev[song.ptr], at=song.start+e.t;
+      if(at>=horizon)break;
+      song.ptr++;
+      if(at<now-.05)continue;
+      playMidiNote(song,e,at);
+    }else if(song.start+song.dur<horizon){
+      song.start+=song.dur; song.ptr=0; song.percPtr=0;
+    }else break;
+  }
+  guard=0;
+  while(guard++<4000&&song.percPtr<song.perc.length){
+    const e=song.perc[song.percPtr], at=song.start+e.t;
+    if(at>=horizon)break;
+    song.percPtr++;
+    if(at<now-.05)continue;
+    percHit(at,e.n,e.v);
+  }
+}
+function tick(){ if(musicOn&&state==='film')tickMidi(); }
+function syncSong(){ if(!ac)return; activeSong=null; }     // re-resolve on next tick
+function sfxChime(){ if(!ac)return; const t=ac.currentTime;
+  voice(t,83,2.2,.06,{wave:'tri',echo:.8,sus:false,rel:.5});
+  voice(t+.35,76,2,.05,{wave:'tri',echo:.8,sus:false,rel:.5}); }
+function sfxClang(){ if(!ac)return; const t=ac.currentTime;
+  noiseHit(t,.06,.09,'highpass',5200,2);
+  const o=ac.createOscillator(); o.setPeriodicWave(pw25);
+  o.frequency.setValueAtTime(2300,t); o.frequency.exponentialRampToValueAtTime(1500,t+.07);
+  const gn=env(t,.07,.03,.02,false); o.connect(gn); gn.connect(master); o.start(t); o.stop(t+.1);}
+function sfxBeam(){ if(!ac)return; const t=ac.currentTime;
+  noiseHit(t,.05,1.6,'bandpass',900,.7);
+  const o=ac.createOscillator(); o.type='sine';
+  o.frequency.setValueAtTime(160,t); o.frequency.linearRampToValueAtTime(420,t+1.4);
+  const gn=env(t,1.5,.05,.4); o.connect(gn); gn.connect(master); o.start(t); o.stop(t+2);}
+function setWind(v){ if(windGain)windGain.gain.setTargetAtTime(v,ac.currentTime,1); }
+
+/* ================= WORLD ART ================= */
+const stars=[]; { const r=mulberry(5); for(let i=0;i<70;i++)stars.push({x:r()*W|0,y:r()*100|0,p:r()*6}); }
+function drawStars(t,dim){
+  for(const s of stars){ const tw=Math.sin(t*1.5+s.p)>.2?1:.4;
+    g.fillStyle=`rgba(215,218,228,${.5*tw*(dim||1)})`; g.fillRect(s.x,s.y,1,1);}
+}
+function bands(cs,y0,y1){
+  const n=cs.length,hh=(y1-y0)/n;
+  for(let i=0;i<n;i++)R(0,y0+i*hh,W,Math.ceil(hh),cs[i]);
+}
+function caption(cues,st){
+  for(const q of cues)if(st>=q[0]&&st<q[1]){
+    R(0,H-26,W,26,'rgba(6,7,12,.55)');
+    if(q[3]){ ctext(q[3],H-22,'#9aa0b5',1); ctext(q[2],H-13,C.white,1); }
+    else ctext(q[2],H-17,C.bone,1);
+  }
+}
+function ring(cx,cy,rr,sq,col){
+  const n=Math.max(12,rr*.8)|0; g.fillStyle=col;
+  for(let a=0;a<n;a++){const th=a/n*6.2832;
+    g.fillRect(cx+Math.cos(th)*rr|0,cy+Math.sin(th)*rr*sq|0,1,1);}
+}
+
+/* ---- characters ---- */
+function drawSaber(x,y,t,pose){
+  x|=0;y|=0;
+  const white=pose==='white';
+  if(white){                                    // avalon: sundress, hair down
+    R(x-1,y-6,2,6,C.skin); R(x+1,y-6,2,6,C.skin);
+    R(x-4,y-14,9,8,C.white); R(x-3,y-6,7,1,'#d8d2c0');
+    R(x-2,y-19,6,6,C.white);
+    R(x-3,y-25,8,6,C.hairS); R(x-4,y-21,2,10,C.hairS); R(x+4,y-21,2,9,C.hairS);
+    R(x,y-27,1,2,C.hairS);                      // ahoge
+    R(x+2,y-23,3,3,C.skin);
+    return;
+  }
+  const walk=pose==='walk', ph=t*7.5, s1=walk?Math.sin(ph):0, s2=walk?Math.sin(ph+Math.PI):0;
+  const lean=pose==='stance'?1:0;
+  // armored boots + blue dress
+  R(x-1+(s1*2|0)-lean,y-11,3,6,C.armor2); R(x-1+(s2*2|0)-lean,y-11,3,6,C.armor);
+  R(x-4-lean,y-15,10,4,C.saberBlue);
+  R(x-3-lean,y-21,8,6,C.saberBlue);
+  R(x-3-lean,y-20,8,3,C.armor);                 // breastplate
+  R(x+4,y-20+lean,2,5,C.armor);                 // sword arm
+  R(x-5-lean,y-19,2,4,C.armor2);
+  // head: bun + ahoge
+  R(x-3,y-27,8,6,C.hairS); R(x-1,y-29,4,2,C.hairS); R(x,y-31,1,2,C.hairS);
+  R(x+2,y-25,3,3,C.skin);
+  if(pose==='stance'||pose==='walk'||pose==='raise'){
+    if(pose==='raise'){                         // sword up, gold
+      g.fillStyle=C.gold;
+      for(let k=0;k<14;k++)g.fillRect(x+5,y-22-k,2,1);
+      R(x+4,y-22,4,2,C.gold2);
+    }else{                                      // invisible air: faint shimmer
+      g.fillStyle='rgba(200,215,235,.3)';
+      for(let k=0;k<12;k++)if((k+((t*6)|0))%3)g.fillRect(x+7+k,y-19-(k>>1),1,1);
+      R(x+5,y-20,3,2,C.gold);                   // hilt
+    }
+  }
+}
+function drawShirou(x,y,t,pose){
+  x|=0;y|=0;
+  const walk=pose==='walk'||pose==='trudge', ph=t*7.5+1.3,
+    s1=walk?Math.sin(ph):0, s2=walk?Math.sin(ph+Math.PI):0;
+  const old=pose==='trudge', hunch=old?1:0;
+  R(x-1+(s1*2|0),y-11,3,6,old?'#2c2a30':'#3a3944'); R(x-1+(s2*2|0),y-11,3,6,old?'#26242a':'#32313c');
+  R(x-3,y-14,8,3,old?'#3a3630':C.shirou);
+  R(x-2,y-20+hunch,6,6,old?'#4a4438':C.shirou);
+  R(x-2,y-19+hunch,6,2,old?'#3a3630':'#e8e4da');
+  R(x+3+(s2*1|0),y-18+hunch,2,5,old?'#4a4438':C.shirou);
+  R(x-3,y-26+hunch,8,6,C.hairSh); R(x-4,y-23+hunch,2,3,C.hairSh);
+  R(x+2,y-23+hunch,3,3,C.skin);
+}
+function drawBerserker(x,y,t){
+  x|=0;y|=0; const br=(Math.sin(t*2)*1)|0;
+  R(x-9,y-26,7,26,C.stone2); R(x+3,y-26,7,26,C.stone);        // legs
+  R(x-13,y-52+br,27,28,C.stone);                              // torso
+  R(x-16,y-46+br,5,16,C.stone2); R(x+12,y-48+br,6,18,C.stone2); // arms
+  R(x-7,y-60+br,15,10,C.stone2);                              // head
+  R(x-4,y-57+br,3,2,'#b8bcc9'); R(x+2,y-57+br,3,2,'#b8bcc9'); // pale eyes
+  R(x-10,y-64+br,20,5,'#2a2a32');                             // wild hair
+  // the stone blade
+  g.fillStyle='#4a4a55';
+  for(let k=0;k<34;k++)g.fillRect(x+16+(k>>2),y-30-k+br,5-(k>>4),1);
+}
+
+/* ================= SCENES ================= */
+let state='title', filmT=0, sceneIdx=-1, S_={};
+const SCN=[
+/* ---- 1 THE SUMMONING ---- */
+{ name:'summon', dur:14, sec:'summon',
+  init(){ setWind(.012); },
+  draw(st){
+    R(0,0,W,H,'#0b0a10');
+    // shed interior: planks
+    for(let y0=0;y0<H;y0+=14)R(0,y0,W,1,'#141118');
+    for(const vx of [40,120,260,340])R(vx,0,2,H,'#141118');
+    // open door on the right: night sky, moon, light pooling in
+    R(332,14,44,202,'#12141f');
+    R(330,14,2,202,'#252838'); R(332,14,44,2,'#252838');
+    R(342,24,10,10,C.moon); R(344,22,6,14,C.moon); R(340,26,14,6,C.moon);
+    R(296,192,86,12,'rgba(170,185,210,.08)');
+    R(312,182,70,10,'rgba(170,185,210,.05)');
+    // the circle: slow bloom, no flash
+    const glow=st<4?clamp(st/4,0,1):1, fade=clamp((st-4)/1.5,0,1);
+    const cx=180,cy=168;
+    const inten=st<4?glow*.9:.9-fade*.55;
+    for(let k=0;k<3;k++)ring(cx,cy,26+k*9,.32,`rgba(150,190,230,${inten*(.7-k*.18)})`);
+    const rr=mulberry(7);
+    g.fillStyle=`rgba(150,190,230,${inten*.8})`;
+    for(let k=0;k<26;k++){const a=rr()*6.28,d2=14+rr()*26;
+      g.fillRect(cx+Math.cos(a)*d2|0,cy+Math.sin(a)*d2*.32|0,1,1);}
+    // rising light at the peak
+    if(st>2.5&&st<7){
+      for(let k=0;k<14;k++){const px=cx-24+((k*37)%48),py=cy-((st-2.5)*26+k*9)%70;
+        g.fillStyle='rgba(170,200,235,.5)';g.fillRect(px,py|0,1,2);}
+    }
+    // saber appears kneeling in the light
+    if(st>4){
+      const cxk=180,cyk=166;
+      R(cxk-3,cyk-2,9,2,C.armor2);                    // kneeling leg
+      R(cxk+2,cyk-8,4,7,C.saberBlue);
+      R(cxk-4,cyk-13,8,6,C.saberBlue); R(cxk-4,cyk-12,8,2,C.armor);
+      R(cxk-4,cyk-19,8,6,C.hairS); R(cxk-2,cyk-21,4,2,C.hairS); R(cxk-1,cyk-23,1,2,C.hairS);
+      R(cxk+2,cyk-17,3,3,C.skin);
+      g.fillStyle='rgba(200,215,235,.3)';
+      for(let k=0;k<10;k++)if((k+((st*6)|0))%3)g.fillRect(cxk+6+k,cyk-6-(k>>1),1,1);
+    }
+    // shirou fallen back, left
+    R(96,160,12,4,'#2a2a35'); R(92,156,8,7,C.hairSh); R(104,158,6,3,C.shirou);
+    caption([
+      [1,4,"THAT NIGHT, IN THE SHED BEHIND THE HOUSE -"],
+      [6.5,10.5,'"ARE YOU MY MASTER?"','SABER'],
+      [11,13.5,"...AND NOTHING WAS EVER ORDINARY AGAIN."],
+    ],st);
+  }},
+/* ---- 2 THE DAYS BETWEEN ---- */
+{ name:'days', dur:14, sec:'days',
+  init(){ setWind(.008); },
+  draw(st){
+    bands(['#241c30','#2c2138','#3a2a40','#4a3444'],0,110);
+    drawStars(st,.5);
+    // yard + house
+    R(0,110,W,106,'#1d1824');
+    R(60,58,240,8,'#2a2018'); R(56,66,248,4,'#1f1812');
+    R(68,70,224,60,'#3a2c20');
+    for(let k=0;k<4;k++){
+      R(84+k*52,80,34,40,'#2c2118');
+      g.fillStyle='rgba(232,190,110,.5)'; g.fillRect(86+k*52,82,30,36);
+      R(84+k*52+16,80,2,40,'#3a2c20');
+    }
+    R(60,130,240,6,'#5a4432'); R(60,136,240,4,'#3a2c20');    // engawa
+    // saber, sitting perfectly straight, bowl in hands
+    R(160,116,8,14,C.saberBlue); R(159,113,10,3,C.armor);
+    R(159,104,9,6,C.hairS); R(161,102,5,2,C.hairS); R(163,100,1,2,C.hairS);
+    R(165,107,3,3,C.skin);
+    R(157,118,5,3,'#e8e4da'); R(158,117,3,1,'#c9c4b8');      // rice bowl
+    const chop=(st*3|0)%2;
+    R(163+chop,115,4,1,'#8a6a3a');                           // chopsticks
+    // shirou, sleeves rolled, tray in hand
+    drawShirou(196,136,st,'stand');
+    R(191,122,10,2,'#8a6a3a'); R(193,120,3,2,'#e8e4da');
+    // rice steam
+    for(let k=0;k<3;k++){const sy=110-((st*8+k*7)%16);
+      g.fillStyle='rgba(240,238,230,.3)';g.fillRect(158+k*2,sy,1,2);}
+    caption([
+      [2,5.5,'"...SECONDS, PLEASE."','SABER'],
+      [6.5,10.5,"THE KING OF KNIGHTS TOOK DINNER VERY SERIOUSLY."],
+      [11,13.5,"THESE WERE THE DAYS WORTH FIGHTING FOR."],
+    ],st);
+  }},
+/* ---- 3 THE WAR ---- */
+{ name:'war', dur:24, sec:'war',
+  init(){ setWind(.01); S_.phase=0; S_.sx=120; S_.bx=270; S_.sparks=[]; S_.shake=0; },
+  draw(st,dt){
+    // night city
+    bands(['#0d1020','#0f1226','#12152c','#141832'],0,120);
+    drawStars(st,.6);
+    R(320,18,14,14,C.moon); R(323,15,8,20,C.moon); R(317,21,20,8,C.moon);
+    g.fillStyle='#0a0d1a';
+    for(let k=0;k<14;k++){const bx=k*30, bh=26+((k*37)%42);
+      g.fillRect(bx,120-bh,24,bh);
+      g.fillStyle='rgba(232,200,120,.25)';
+      for(let wy=124-bh;wy<114;wy+=9)for(let wx2=bx+3;wx2<bx+21;wx2+=7)
+        if(((wx2*7+wy*13)%17)<5)g.fillRect(wx2,wy,2,2);
+      g.fillStyle='#0a0d1a';
+    }
+    R(0,120,W,6,'#1a1d2c'); bands(['#12141f','#0e101a','#0b0d16'],126,H);
+    // duel: approach - clash - knockback
+    const cycle=(st%3.2)/3.2;
+    let sx=S_.sx, bx=S_.bx;
+    if(cycle<.4){ sx=120+cycle/.4*54; }
+    else if(cycle<.5){ sx=174; if(!S_.clanged){S_.clanged=true;sfxClang();S_.shake=3;
+      for(let k=0;k<12;k++)S_.sparks.push({x:186,y:138,vx:(Math.random()-.4)*90,
+        vy:-Math.random()*70,l:.5});} }
+    else { sx=174-(cycle-.5)/.5*54; S_.clanged=false; }
+    S_.shake=Math.max(0,S_.shake-dt*12);
+    const shx=(Math.random()-.5)*S_.shake|0, shy=(Math.random()-.5)*S_.shake|0;
+    g.translate(shx,shy);
+    drawBerserker(266,168,st);
+    drawSaber(sx|0,168,st,cycle<.5?'walk':'stance');
+    g.setTransform(1,0,0,1,0,0);
+    // sparks
+    for(const p of S_.sparks){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=160*dt; p.l-=dt;
+      if(p.l>0){g.fillStyle=C.gold2;g.globalAlpha=clamp(p.l*2,0,1);
+        g.fillRect(p.x|0,p.y|0,1,1);} }
+    g.globalAlpha=1;
+    S_.sparks=S_.sparks.filter(p=>p.l>0);
+    // shirou at the edge
+    drawShirou(38,168,st,'stand');
+    caption([
+      [2,6,"THE FOURTH NIGHT: BERSERKER."],
+      [8,12.5,"THIRTEEN TIMES SHE STRUCK. THE GIANT LAUGHED."],
+      [13,16,"SHE STRUCK AGAIN."],
+      [18,22,'"SABER!!"','SHIROU'],
+    ],st);
+  }},
+/* ---- 4 EXCALIBUR ---- */
+{ name:'holy', dur:18, sec:'holy',
+  init(){ setWind(.015); S_.beamed=false; S_.grail=[]; const r=mulberry(31);
+    for(let i=0;i<90;i++)S_.grail.push({a:r()*6.28,r2:6+r()*26,sp:.2+r()*.5,alive:true}); },
+  draw(st,dt){
+    bands(['#12101e','#151226','#18142c','#1a1732'],0,130);
+    // the grail: slow dark swirl (kept slow + low contrast)
+    const gx2=270,gy=56;
+    let alive=0;
+    for(const p of S_.grail){
+      if(!p.alive)continue; alive++;
+      p.a+=dt*p.sp;
+      const px=gx2+Math.cos(p.a)*p.r2, py=gy+Math.sin(p.a)*p.r2*.6;
+      g.fillStyle=(p.r2>20)?'rgba(60,40,80,.8)':'rgba(30,20,45,.9)';
+      g.fillRect(px|0,py|0,2,2);
+    }
+    // temple mountain + gate
+    g.fillStyle='#0e0c18';
+    for(let x=0;x<W;x+=8){const h=40+Math.sin(x*.02+1)*16;g.fillRect(x,130-h+40,8,h+46);}
+    R(150,96,6,34,'#241a20'); R(196,96,6,34,'#241a20');
+    R(142,90,68,7,'#2c2028'); R(146,84,60,5,'#241a20');
+    bands(['#0d0b16','#0a0912'],170,H);
+    // saber on the steps
+    const charge=clamp((st-4)/4,0,1), fired=st>9;
+    drawSaber(176,168,st,st<4?'stance':'raise');
+    // gathering light: rising motes
+    if(st>4&&st<9){
+      const rr=mulberry((st*5|0)+2);
+      for(let k=0;k<30*charge;k++){
+        g.fillStyle='rgba(232,192,80,.6)';
+        g.fillRect(120+rr()*120|0,190-rr()*80|0,1,1);
+      }
+    }
+    if(st>9&&!S_.beamed){S_.beamed=true;sfxBeam();}
+    // the beam: continuous ramp, no strobe
+    if(fired){
+      const ramp=clamp((st-9)/1.6,0,1), dieoff=clamp((16.5-st)/3,0,1);
+      const bt=ramp*dieoff, wPix=(4+bt*22)|0, alpha=(.25+bt*.45)*Math.max(.01,dieoff);
+      if(bt<=0.01){ /* beam finished */ }
+      const x0=181-(wPix>>1);
+      // beam angled from sword up to the grail
+      for(let k=0;k<26;k++){
+        const yy=150-k*5, xx=x0+((gx2-181)*(k/26))|0;
+        g.fillStyle=`rgba(240,216,136,${alpha})`;
+        g.fillRect(xx,yy-4,wPix,6);
+        g.fillStyle=`rgba(255,244,200,${alpha*.7})`;
+        g.fillRect(xx+(wPix>>2),yy-4,wPix>>1,6);
+      }
+      // grail erodes
+      let kill=(bt*90)|0;
+      for(const p of S_.grail){ if(kill<=0)break; if(p.alive){p.alive=false;kill--;} }
+      // soft gold wash, capped low
+      R(0,0,W,H,`rgba(240,216,136,${.1*bt})`);
+    }
+    caption([
+      [1.5,4.5,"RYUUDOU TEMPLE. THE GRAIL, OVERHEAD, HUNGRY."],
+      [5,8.5,"THE WIND FELL AWAY - AND THE BLADE WAS GOLD."],
+      [9.5,13,'"EX - CALIBUR."','SABER'],
+      [14.5,17.5,"AND THE NIGHT WAS CLEAN AGAIN."],
+    ],st);
+  }},
+/* ---- 5 FAREWELL ---- */
+{ name:'farewell', dur:18, sec:'farewell',
+  init(){ setWind(.02); S_.motes=[]; },
+  draw(st,dt){
+    const d=clamp(st/16,0,1);
+    bands([mix('#1a1a30','#4a4468',d),mix('#242040','#7a5e6a',d),
+      mix('#2c2850','#b08a68',d),mix('#343060','#e0b878',d)],0,140);
+    drawStars(st,1-d);
+    g.fillStyle='#151222';
+    for(let x=0;x<W;x+=8){const h=26+Math.sin(x*.02+1)*12;g.fillRect(x,140-h+20,8,h+56);}
+    bands(['#12101c','#0e0c16'],176,H);
+    // saber dissolving into gold
+    const dis=clamp((st-3)/10,0,1);
+    if(dis<1){
+      const rng=mulberry(17); let idx=0;
+      // simplified saber sprite with skip mask
+      const skip=()=>rng()<dis;
+      const sx=228,sy=170;
+      const px=(dx,dy,w,h,c)=>{ if(!skip())R(sx+dx,sy+dy,w,h,c); };
+      px(-1,-11,3,6,C.armor2); px(2,-11,3,6,C.armor);
+      px(-4,-15,10,4,C.saberBlue);
+      px(-3,-21,8,6,C.saberBlue); px(-3,-20,8,3,C.armor);
+      px(-3,-27,8,6,C.hairS); px(-1,-29,4,2,C.hairS); px(0,-31,1,2,C.hairS);
+      px(2,-25,3,3,C.skin);
+      if(Math.random()<.5+dis)S_.motes.push({x:222+Math.random()*14,
+        y:140+Math.random()*30,v:8+Math.random()*12,p:Math.random()*6,l:2.2});
+    }
+    for(const p of S_.motes){
+      p.y-=p.v*dt; p.x+=Math.sin(st*2+p.p)*dt*7; p.l-=dt;
+      if(p.l>0){ g.fillStyle=C.gold2; g.globalAlpha=clamp(p.l,0,1)*.9;
+        g.fillRect(p.x|0,p.y|0,1,1);}
+    }
+    g.globalAlpha=1;
+    S_.motes=S_.motes.filter(p=>p.l>0);
+    // shirou running, then standing where she was
+    const sx2=140+clamp((st-2)/6,0,1)*64;
+    drawShirou(sx2|0,170,st,st<8?'walk':'stand');
+    caption([
+      [2,5.5,"THE WAR WAS OVER. THE COST CAME DUE."],
+      [7,11,'"SHIROU - I LOVE YOU."','SABER'],
+      [13,16.5,"AND THE MORNING TOOK HER."],
+    ],st);
+  }},
+/* ---- 6 CAMLANN ---- */
+{ name:'camlann', dur:14, sec:'camlann',
+  init(){ setWind(.03); },
+  draw(st){
+    bands(['#8a5a3a','#9a6640','#aa7246','#8a5c3c'],0,120);
+    R(60,30,18,18,'#f0c888'); R(64,26,10,26,'#f0c888'); R(56,34,26,10,'#f0c888');
+    // hill
+    g.fillStyle='#4a3020';
+    for(let x=-10;x<W+10;x+=7){const h=30+Math.sin(x*.015+2)*18;g.fillRect(x,120-h+40,7,h+56);}
+    // planted swords + torn banners
+    const rr=mulberry(13);
+    for(let k=0;k<11;k++){
+      const px2=20+k*34+((k*7)%9), py=126+((k*13)%40);
+      R(px2,py-14,2,14,'#2c2018'); R(px2-3,py-12,8,2,'#2c2018');
+    }
+    R(300,80,3,60,'#2c2018');
+    const fl=(Math.sin(st*1.4)*2)|0;
+    R(303,82,14+fl,8,'#6a2c28'); R(303,90,10+fl,4,'#6a2c28');
+    // the king, lying beneath the sunset
+    R(150,160,26,4,'#3a2a1c');                              // bedroll
+    R(152,156,9,4,C.hairS); R(151,158,3,2,C.skin);
+    R(160,157,14,4,C.saberBlue); R(172,158,5,2,C.armor);
+    // her breath slows: tiny chest movement, then still
+    if(st<8&&(st*1.2|0)%2)R(162,156,5,1,C.saberBlue);
+    caption([
+      [1.5,5,"CENTURIES AWAY, ON A HILL CALLED CAMLANN -"],
+      [6,9.5,"THE KING OF KNIGHTS CLOSED HER EYES..."],
+      [10,13.5,"...AND DREAMED OF A GARDEN."],
+    ],st);
+  }},
+/* ---- 7 A LIFETIME ---- */
+{ name:'seek', dur:16, sec:'seek',
+  init(){ setWind(.02); S_.off=0; },
+  draw(st,dt){
+    S_.off+=dt*22;
+    const ph=clamp(st/16,0,1)*4;                 // 0 city 1 ruin 2 desert 3 snow
+    const k=Math.min(3,ph|0), f=ph-k;
+    const skies=[['#4a5a7a','#5c6c8a'],['#5a4438','#6a5040'],['#c9a05a','#d8b06a'],['#aab4c4','#c2ccd8']];
+    const grounds=['#3a4254','#443228','#a8854a','#d8e0e8'];
+    const sA=skies[k], sB=skies[Math.min(3,k+1)];
+    bands([mix(sA[0],sB[0],f),mix(sA[1],sB[1],f)],0,120);
+    // skyline morphs per phase
+    g.fillStyle='rgba(20,22,34,.8)';
+    for(let i=0;i<12;i++){
+      const bx=((i*40-S_.off*.4)%(W+80)+(W+80))%(W+80)-40;
+      const bh=k===0?30+((i*29)%40): k===1?14+((i*29)%22): k===2?8+((i*13)%10):12+((i*17)%14);
+      g.fillRect(bx,120-bh,k===2?12:22,bh);
+    }
+    R(0,120,W,4,mix(grounds[k],grounds[Math.min(3,k+1)],f));
+    bands([mix(grounds[k],'#111',.35),mix(grounds[k],'#111',.5)],124,H);
+    // weather motes: ash / sand / snow
+    if(k>0){const rr=mulberry(3);
+      for(let i=0;i<26;i++){
+        const wx=(i*53+st*(k===3?14:30))%W, wy=(i*37+st*(k===3?18:8))%110;
+        g.fillStyle=k===1?'rgba(120,110,100,.5)':k===2?'rgba(220,190,120,.5)':'rgba(240,244,250,.8)';
+        g.fillRect(wx|0,wy|0,1,1);
+      }}
+    // shirou walks. and walks.
+    drawShirou(150,164,st,k<1?'walk':'trudge');
+    caption([
+      [1.5,5.5,"HE LIVED AN ENTIRE LIFE, WALKING TOWARD HER."],
+      [7,10.5,"WARS. WINTERS. WORK THAT NEVER ENDED."],
+      [12,15.5,"A PROMISE IS A PROMISE."],
+    ],st);
+  }},
+/* ---- 8 AVALON ---- */
+{ name:'avalon', dur:1e9, sec:'avalon',
+  init(){ setWind(.035); S_.motes=[]; const r=mulberry(21);
+    for(let i=0;i<24;i++)S_.motes.push({x:r()*W,y:40+r()*140,p:r()*7,v:2+r()*3});
+    S_.met=false; },
+  draw(st,dt){
+    bands(['#a8c8e0','#b4d0e4','#c2d8e8','#d0e0ec'],0,96);
+    // sun, gentle
+    R(70,26,16,16,'#f5ecc9'); R(74,22,8,24,'#f5ecc9'); R(66,30,24,8,'#f5ecc9');
+    // the field: green-gold, wind moving through in waves
+    bands([C.avGreen,'#6e9646','#639040',C.avGreen2],96,H);
+    for(let i=0;i<120;i++){
+      const gx2=(i*13)%W, gy=104+(i*29)%100;
+      const wv=Math.sin(st*1.6+gx2*.05+gy*.02);
+      g.fillStyle=wv>.3?'rgba(216,200,120,.5)':'rgba(90,130,60,.5)';
+      g.fillRect(gx2+((wv*2)|0),gy,2,1);
+    }
+    // the tree
+    R(296,60,10,70,'#4a3a28'); R(290,120,22,8,'#3d3020');
+    g.fillStyle='#5c8a3c';
+    R(266,34,70,34,'#5c8a3c'); R(276,24,50,16,'#68984a'); R(258,50,86,22,'#548436');
+    g.fillStyle='rgba(216,200,120,.5)';
+    for(let i=0;i<30;i++)g.fillRect(262+(i*17)%76,28+(i*13)%40,2,1);
+    // light motes
+    for(const m of S_.motes){
+      m.y-=m.v*dt*.4; m.x+=Math.sin(st*.5+m.p)*dt*6;
+      if(m.y<20){m.y=190;m.x=Math.random()*W;}
+      const tw=.3+.6*Math.max(0,Math.sin(st*1.8+m.p));
+      g.fillStyle=`rgba(240,232,190,${tw*.8})`; g.fillRect(m.x|0,m.y|0,1,1);
+    }
+    // saber in white, waiting by the tree; shirou arrives from the left
+    const sx=clamp(st/14,0,1)*196+36;
+    const met=sx>=228;
+    if(met&&!S_.met){S_.met=true;}
+    drawSaber(252,176,st,'white');
+    drawShirou(Math.min(sx,238)|0,178,st,met?'stand':'walk');
+    caption([
+      [2,6,"AVALON. OUTSIDE OF TIME. OUTSIDE OF EVERYTHING."],
+      [8,12,"SHE TURNS. HE STOPS. NO ONE HURRIES NOW."],
+      [15,19.5,'"I TOLD YOU. I WOULD WAIT FOR YOU."','SABER'],
+    ],st);
+    if(st>21){
+      ctext("THE STORY ENDS WHERE IT BEGAN:",84,`rgba(239,234,222,${clamp((st-21)/2,0,.9)})`,1);
+      ctext("A BOY AND A KING",96,`rgba(239,234,222,${clamp((st-21.6)/2,0,.9)})`,1);
+      if(st>24&&(st*1.2|0)%2)ctext("CLICK TO BEGIN AGAIN",H-10,'#5a7a5a',1);
+    }
+    if(st>16)musicVol=Math.max(.4,1-(st-16)*.04);
+  }},
+];
+
+/* ---------------- title ---------------- */
+function drawTitle(t){
+  R(0,0,W,H,'#0b0a10');
+  for(let y0=0;y0<H;y0+=14)R(0,y0,W,1,'#131017');
+  for(const vx of [50,140,250,330])R(vx,0,2,H,'#131017');
+  const cx=192,cy=170;
+  const pulse=.5+.15*Math.sin(t*1.2);
+  for(let k=0;k<3;k++)ring(cx,cy,26+k*9,.32,`rgba(150,190,230,${pulse*(.6-k*.15)})`);
+  const rr=mulberry(7);
+  g.fillStyle=`rgba(150,190,230,${pulse*.7})`;
+  for(let k=0;k<22;k++){const a=rr()*6.28,d2=14+rr()*26;
+    g.fillRect(cx+Math.cos(a)*d2|0,cy+Math.sin(a)*d2*.32|0,1,1);}
+  ctext("FATE/STAY NIGHT",64,C.white,2);
+  ctext("16-BIT · SABER",90,C.bone,1);
+  R(W/2-60,102,120,1,'#242838');
+  if((t*1.6|0)%2)ctext("PRESS START",130,'#8a93a5',1);
+  ctext("A TRIBUTE IN PIXELS AND SQUARE WAVES",H-12,'#2c2f40',1);
+}
+
+/* ---------------- main loop ---------------- */
+let last=0;
+try{ localStorage.setItem('fate16_views',
+  (+localStorage.getItem('fate16_views')||1)+1); }catch(e){}
+const qp=new URLSearchParams(location.search);
+if(qp.get('t')!==null){ state='film'; filmT=parseFloat(qp.get('t'))||0; }
+
+function sceneAt(t){
+  let acc=0;
+  for(let i=0;i<SCN.length;i++){ if(t<acc+SCN[i].dur)return[i,t-acc]; acc+=SCN[i].dur; }
+  return[SCN.length-1,t-acc+SCN[SCN.length-1].dur];
+}
+function frame(ts){
+  requestAnimationFrame(frame);
+  const dt=Math.min(.05,(ts-last)/1000)||.016; last=ts;
+  if(state==='title'){ drawTitle(ts/1000); curSection='none'; return; }
+  if(!window._frozen)filmT+=dt;
+  const [i,st]=sceneAt(filmT), sc=SCN[i];
+  if(i!==sceneIdx){ sceneIdx=i; S_={}; if(sc.init)sc.init(); }
+  curSection=sc.sec;
+  sc.draw(st,dt);
+  if(st<.6)R(0,0,W,H,`rgba(0,0,0,${1-st/.6})`);
+  const rem=sc.dur-st;
+  if(sc.dur<1e8&&rem<.6)R(0,0,W,H,`rgba(0,0,0,${1-rem/.6})`);
+  for(let k=0;k<26;k++){g.fillStyle=Math.random()<.5?'rgba(255,255,255,.04)':'rgba(0,0,0,.06)';
+    g.fillRect(Math.random()*W|0,Math.random()*H|0,1,1);}
+}
+requestAnimationFrame(frame);
+
+addEventListener('pointerdown',()=>{
+  if(state==='title'){
+    initAudio(); if(ac.state==='suspended')ac.resume();
+    state='film'; filmT=0; sceneIdx=-1; musicVol=1; syncSong(); sfxChime();
+  }else if(SCN[sceneIdx]&&SCN[sceneIdx].name==='avalon'){
+    const st=sceneAt(filmT)[1];
+    if(st>24){ state='title'; sceneIdx=-1; curSection='none'; musicVol=1; if(windGain)setWind(0); }
+  }
+});
+window.seek=(s,fr)=>{state='film';filmT=s;sceneIdx=-1;window._frozen=!!fr;syncSong();};
+addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'&&state==='film'){
+    let acc=0; for(let i=0;i<=sceneIdx;i++)acc+=SCN[i].dur; filmT=acc;
+  }
+});
+</script>
+</body>
+</html>

@@ -119,6 +119,7 @@
   <div class="item"><span class="ic">&#9675;</span>Pod 153</div>
   <div class="item"><span class="ic">&#10022;</span>The Fayth</div>
   <div class="item"><span class="ic">&#9634;</span>Midnight Channel</div>
+  <div class="item"><span class="ic">&#10038;</span>Holy Grail Network</div>
   <div class="item"><span class="ic">&#9635;</span>Machine Village</div>
   <div class="item"><span class="ic">&#9650;</span>The Bunker</div>
   <hr>
@@ -205,6 +206,22 @@
           <h3>Persona 4 &mdash; 16-BIT | Yukiko (Electric Piano)</h3>
           <div class="sub">Midnight Channel <span class="check">&#10004;</span></div>
           <div class="sub"><span id="views4">1 view</span> &middot; every rainy midnight</div>
+        </div>
+      </div>
+    </a>
+
+    <a class="card" href="watch-fate.html">
+      <div class="thumb">
+        <canvas id="th5" width="192" height="108"></canvas>
+        <span class="live">PIXEL &middot; CHIPTUNE</span>
+        <span class="dur">2:20</span>
+      </div>
+      <div class="meta">
+        <div class="av"><canvas id="av5" width="14" height="14"></canvas></div>
+        <div>
+          <h3>Fate/stay night &mdash; 16-BIT | Saber (EMIYA + Pride of the King)</h3>
+          <div class="sub">Holy Grail Network <span class="check">&#10004;</span></div>
+          <div class="sub"><span id="views5">1 view</span> &middot; two wars ago</div>
         </div>
       </div>
     </a>
@@ -372,6 +389,40 @@
   gx.fillStyle='rgba(0,0,0,.25)';gx.fillRect(0,0,W,3);gx.fillRect(0,H-3,W,3);
 })();
 
+/* ---- Fate thumbnail: Excalibur over Ryuudou ---- */
+(function(){
+  const c=document.getElementById('th5'),gx=c.getContext('2d');
+  const W=192,H=108;
+  const sky=['#12101e','#151226','#18142c','#1a1732'];
+  for(let i=0;i<4;i++){gx.fillStyle=sky[i];gx.fillRect(0,i*16,W,16);}
+  let s=17;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647;};
+  gx.fillStyle='rgba(215,218,228,.5)';
+  for(let i=0;i<24;i++)gx.fillRect(rnd()*W|0,rnd()*40|0,1,1);
+  // grail swirl, top right
+  gx.fillStyle='rgba(60,40,80,.85)';
+  for(let i=0;i<50;i++){const a=rnd()*6.28,r2=4+rnd()*15;
+    gx.fillRect(138+Math.cos(a)*r2|0,26+Math.sin(a)*r2*.6|0,2,2);}
+  // mountain + gate
+  gx.fillStyle='#0e0c18';
+  for(let x=0;x<W;x+=6){const h=22+Math.sin(x*.04+1)*9;gx.fillRect(x,66-h+22,6,h+24);}
+  gx.fillStyle='#241a20';gx.fillRect(66,48,3,18);gx.fillRect(90,48,3,18);
+  gx.fillStyle='#2c2028';gx.fillRect(62,44,35,4);gx.fillRect(64,41,31,3);
+  gx.fillStyle='#0d0b16';gx.fillRect(0,88,W,20);
+  // the beam: sword to swirl
+  for(let k=0;k<14;k++){
+    const yy=78-k*4, xx=86+((138-86)*(k/14))|0;
+    gx.fillStyle='rgba(240,216,136,.6)';gx.fillRect(xx-5,yy-2,11,4);
+    gx.fillStyle='rgba(255,244,200,.5)';gx.fillRect(xx-2,yy-2,5,4);
+  }
+  // tiny saber, arms up
+  gx.fillStyle='#2c4a9a';gx.fillRect(82,74,7,8);
+  gx.fillStyle='#c9ccd4';gx.fillRect(82,75,7,2);
+  gx.fillStyle='#e8d080';gx.fillRect(82,68,8,6);
+  gx.fillStyle='rgba(232,192,80,.7)';
+  for(let i=0;i<12;i++)gx.fillRect(60+rnd()*70|0,60+rnd()*24|0,1,1);
+  gx.fillStyle='rgba(0,0,0,.25)';gx.fillRect(0,0,W,3);gx.fillRect(0,H-3,W,3);
+})();
+
 /* ---- pod avatars ---- */
 function pod(id,body,dark){
   const g=document.getElementById(id).getContext('2d');
@@ -381,6 +432,14 @@ function pod(id,body,dark){
 }
 pod('av0','#8a857a','#54504c');
 pod('av1','#8a857a','#54504c');
+/* command seal avatar */
+(function(){
+  const gx=document.getElementById('av5').getContext('2d');
+  gx.fillStyle='#c22e3a';
+  gx.fillRect(6,1,2,5);gx.fillRect(3,4,3,2);gx.fillRect(8,4,3,2);
+  gx.fillRect(4,7,2,3);gx.fillRect(8,7,2,3);gx.fillRect(6,9,2,4);
+  gx.fillStyle='rgba(194,46,58,.4)';gx.fillRect(2,2,10,10);
+})();
 /* midnight channel avatar: a tiny glowing tv */
 (function(){
   const gx=document.getElementById('av4').getContext('2d');
@@ -410,7 +469,7 @@ pod('av1','#8a857a','#54504c');
 document.getElementById('sform').addEventListener('submit',e=>{
   e.preventDefault();
   const b=document.getElementById('sbox');
-  b.value='';b.placeholder='no results. this world has four videos.';
+  b.value='';b.placeholder='no results. this world has five videos.';
 });
 try{
   const n=+localStorage.getItem('nier16_views')||1;
@@ -421,6 +480,8 @@ try{
   document.getElementById('views3').textContent=k+(k===1?' view':' views');
   const p=+localStorage.getItem('p416_views')||1;
   document.getElementById('views4').textContent=p+(p===1?' view':' views');
+  const f=+localStorage.getItem('fate16_views')||1;
+  document.getElementById('views5').textContent=f+(f===1?' view':' views');
 }catch(e){}
 </script>
 </body>

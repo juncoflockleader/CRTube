@@ -15,6 +15,10 @@ A tiny fake video site hosting pixel-art tribute films, rendered live on a
   The Aerie, the giant Shade, five years of stone, and an escape at full sprint.
 - **Persona 4 — 16-BIT · Yukiko** ([watch-p4.html](watch-p4.html), script in [SCRIPT-P4.md](SCRIPT-P4.md))
   The Midnight Channel, Inaba in the fog, a laughing fit by the river, and a spring train.
+- **Fate/stay night — 16-BIT · Saber** ([watch-fate.html](watch-fate.html), script in [SCRIPT-FATE.md](SCRIPT-FATE.md))
+  The summoning, Berserker, Excalibur, a farewell — and the Last Episode: Avalon.
+  First film with two soundtracks: the engine switches MIDIs between battle and
+  separation scenes, and plays the battle file's own channel-9 percussion.
 
 ## How it works
 
@@ -36,8 +40,9 @@ Open `index.html` in a browser. That's it — `file://` works.
 
 An unofficial, non-commercial fan tribute. NieR:Automata, NieR Replicant, and
 Final Fantasy X, their characters, and their music belong to Square Enix;
-Persona 4 and its music belong to Atlus/SEGA. Original compositions by
-Keiichi Okabe ("Weight of the World", "Kainé / Escape"), Nobuo Uematsu
-("To Zanarkand"), and Shoji Meguro (Persona 4). Staff names shown in the
-credits sequence are factual credits of the original games. If you own these
-rights and want something taken down, open an issue.
+Persona 4 and its music belong to Atlus/SEGA; Fate/stay night and its music
+belong to TYPE-MOON. Original compositions by Keiichi Okabe ("Weight of the
+World", "Kainé / Escape"), Nobuo Uematsu ("To Zanarkand"), Shoji Meguro
+(Persona 4), and the Fate/stay night composers (Keita Haga, Kenji Kawai).
+Staff names shown in the credits sequence are factual credits of the original
+games. If you own these rights and want something taken down, open an issue.
