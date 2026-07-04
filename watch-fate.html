@@ -384,18 +384,23 @@ function drawSaber(x,y,t,pose){
     }
   }
 }
-function drawShirou(x,y,t,pose){
-  x|=0;y|=0;
+function drawShirou(x,y,t,pose,arch){
+  x|=0;y|=0; arch=arch||0;                 // 0 = the boy, 1 = the man in red
   const walk=pose==='walk'||pose==='trudge', ph=t*7.5+1.3,
     s1=walk?Math.sin(ph):0, s2=walk?Math.sin(ph+Math.PI):0;
   const old=pose==='trudge', hunch=old?1:0;
+  const hair=mix(C.hairSh,'#e8e4da',arch);
+  const coat=old?mix('#4a4438','#a83028',arch):C.shirou;
+  const coat2=old?mix('#3a3630','#8a231e',arch):C.shirou;
+  const inner=old?mix('#3a3630','#2a2724',arch):'#e8e4da';
   R(x-1+(s1*2|0),y-11,3,6,old?'#2c2a30':'#3a3944'); R(x-1+(s2*2|0),y-11,3,6,old?'#26242a':'#32313c');
-  R(x-3,y-14,8,3,old?'#3a3630':C.shirou);
-  R(x-2,y-20+hunch,6,6,old?'#4a4438':C.shirou);
-  R(x-2,y-19+hunch,6,2,old?'#3a3630':'#e8e4da');
-  R(x+3+(s2*1|0),y-18+hunch,2,5,old?'#4a4438':C.shirou);
-  R(x-3,y-26+hunch,8,6,C.hairSh); R(x-4,y-23+hunch,2,3,C.hairSh);
-  R(x+2,y-23+hunch,3,3,C.skin);
+  R(x-3,y-14,8,3,coat2);
+  if(arch>.4&&old)R(x-5-(s1*1|0),y-16+hunch,2,9,mix('#4a4438','#8a231e',arch)); // shroud tail
+  R(x-2,y-20+hunch,6,6,coat);
+  R(x-2,y-19+hunch,6,2,inner);
+  R(x+3+(s2*1|0),y-18+hunch,2,5,coat);
+  R(x-3,y-26+hunch,8,6,hair); R(x-4,y-23+hunch,2,3,hair);
+  R(x+2,y-23+hunch,3,3,mix(C.skin,'#b88a68',arch*.6));
 }
 function drawBerserker(x,y,t){
   x|=0;y|=0; const br=(Math.sin(t*2)*1)|0;
@@ -694,7 +699,7 @@ const SCN=[
       g.fillRect(bx,120-bh,k===2?12:22,bh);
     }
     R(0,120,W,4,mix(grounds[k],grounds[Math.min(3,k+1)],f));
-    bands([mix(grounds[k],'#111',.35),mix(grounds[k],'#111',.5)],124,H);
+    bands([mix(grounds[k],'#111111',.35),mix(grounds[k],'#111111',.5)],124,H);
     // weather motes: ash / sand / snow
     if(k>0){const rr=mulberry(3);
       for(let i=0;i<26;i++){
@@ -702,12 +707,14 @@ const SCN=[
         g.fillStyle=k===1?'rgba(120,110,100,.5)':k===2?'rgba(220,190,120,.5)':'rgba(240,244,250,.8)';
         g.fillRect(wx|0,wy|0,1,1);
       }}
-    // shirou walks. and walks.
-    drawShirou(150,164,st,k<1?'walk':'trudge');
+    // shirou walks. and walks. and slowly becomes the man in red.
+    const arch=clamp((ph-1)/2.2,0,1);
+    drawShirou(150,164,st,k<1?'walk':'trudge',arch);
     caption([
-      [1.5,5.5,"HE LIVED AN ENTIRE LIFE, WALKING TOWARD HER."],
-      [7,10.5,"WARS. WINTERS. WORK THAT NEVER ENDED."],
-      [12,15.5,"A PROMISE IS A PROMISE."],
+      [1.5,5,"HE LIVED AN ENTIRE LIFE, WALKING TOWARD HER."],
+      [5.5,9,"WARS. WINTERS. WORK THAT NEVER ENDED."],
+      [9.5,13,"UNTIL HIS HAIR TURNED WHITE, AND HIS COAT TURNED RED."],
+      [13.5,15.8,"A PROMISE IS A PROMISE."],
     ],st);
   }},
 /* ---- 8 AVALON ---- */

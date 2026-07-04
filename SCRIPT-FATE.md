@@ -61,9 +61,13 @@ the sunset, eyes closing — done, at last, with the battlefield.
 
 ### 7 · A LIFETIME (16s) — *Pride, steady*
 One scene, four seasons scrolling past behind a walking figure: city, ruin,
-desert, snow. Shirou, older each phase, coat heavier, stride unchanged.
+desert, snow. Shirou, older each phase, stride unchanged — and phase by phase
+he becomes the silhouette every Fate fan recognizes: the hair goes white, the
+coat goes red, a shroud-tail trailing behind him in the wind.
 > *He lived an entire life walking toward her.*
+> *Until his hair turned white, and his coat turned red.*
 > *A promise is a promise.*
+(In Avalon he is the auburn-haired boy again — that is what arriving means.)
 
 ### 8 · AVALON (hold) — *Pride, warm, far away*
 Green-gold grass to the horizon, wind moving through it in waves, one great
