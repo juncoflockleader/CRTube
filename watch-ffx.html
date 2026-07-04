@@ -608,7 +608,7 @@ const SCN=[
       [2,6,'"STAY WITH ME UNTIL THE END."','YUNA'],
       [7,11.5,'"NOT UNTIL THE END..."','TIDUS'],
       [11.5,15,'"...ALWAYS."','TIDUS'],
-      [20,24.5,'"NEVER FORGET THEM."','YUNA'],
+      [16.5,21,'"THANK YOU."','YUNA'],
     ],st);
   }},
 /* ---- 7 DAWN SEA ---- */
@@ -645,7 +645,10 @@ const SCN=[
       g.fillStyle=C.pyre; g.globalAlpha=twk*.8; g.fillRect(f.x|0,f.y|0,1,1);
     }
     g.globalAlpha=1;
-    caption([[7,11.5,'"AND THE DREAMS THAT HAVE FADED..."','YUNA']],st);
+    caption([
+      [7,11,'"AND THE DREAMS THAT HAVE FADED..."','YUNA'],
+      [11.5,15.5,'"NEVER FORGET THEM."','YUNA'],
+    ],st);
     if(st>13){ ctext("- THIS IS MY STORY -",92,`rgba(239,234,222,${clamp((st-13)/2,0,.9)})`,1);
       if(st>16&&(st*1.2|0)%2)ctext("CLICK TO BEGIN AGAIN",H-10,'#5a6478',1); }
     if(st>10)musicVol=Math.max(.4,1-(st-10)*.04);

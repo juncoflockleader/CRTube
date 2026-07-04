@@ -51,11 +51,13 @@ pixel by pixel he comes apart into rising light. Yuna runs to hold him
 and passes through.
 > YUNA: "Stay with me until the end."
 > TIDUS: "Not until the end... always."
+And as he goes — the only thing left worth saying:
+> YUNA: "Thank you."
 
 ### 7 · DAWN SEA (hold) — *the piano keeps playing, softly, to the end*
 A cliff over a dawn ocean. Yuna alone, facing the water. She whistles —
 the way he taught her. Pyreflies drift out to sea.
-> "Never forget them."
+> YUNA: "And the dreams that have faded... never forget them."
 `— THIS IS MY STORY —` · *click to begin again*
 
 ## Emotional throughline
