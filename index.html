@@ -118,6 +118,7 @@
   <div class="item"><span class="ic">&#9679;</span>Pod 042</div>
   <div class="item"><span class="ic">&#9675;</span>Pod 153</div>
   <div class="item"><span class="ic">&#10022;</span>The Fayth</div>
+  <div class="item"><span class="ic">&#9634;</span>Midnight Channel</div>
   <div class="item"><span class="ic">&#9635;</span>Machine Village</div>
   <div class="item"><span class="ic">&#9650;</span>The Bunker</div>
   <hr>
@@ -188,6 +189,22 @@
           <h3>NieR Replicant &mdash; 16-BIT | Kain&eacute; / Escape (Piano)</h3>
           <div class="sub">Grimoire Weiss <span class="check">&#10004;</span></div>
           <div class="sub"><span id="views3">1 view</span> &middot; 1,400 years from now</div>
+        </div>
+      </div>
+    </a>
+
+    <a class="card" href="watch-p4.html">
+      <div class="thumb">
+        <canvas id="th4" width="192" height="108"></canvas>
+        <span class="live">PIXEL &middot; CHIPTUNE</span>
+        <span class="dur">1:52</span>
+      </div>
+      <div class="meta">
+        <div class="av"><canvas id="av4" width="14" height="14"></canvas></div>
+        <div>
+          <h3>Persona 4 &mdash; 16-BIT | Yukiko (Electric Piano)</h3>
+          <div class="sub">Midnight Channel <span class="check">&#10004;</span></div>
+          <div class="sub"><span id="views4">1 view</span> &middot; every rainy midnight</div>
         </div>
       </div>
     </a>
@@ -325,6 +342,36 @@
   gx.fillStyle='rgba(0,0,0,.25)';gx.fillRect(0,0,W,3);gx.fillRect(0,H-3,W,3);
 })();
 
+/* ---- P4 thumbnail: the midnight channel ---- */
+(function(){
+  const c=document.getElementById('th4'),gx=c.getContext('2d');
+  const W=192,H=108;
+  gx.fillStyle='#0c0b12';gx.fillRect(0,0,W,H);
+  gx.fillStyle='#161420';gx.fillRect(0,84,W,24);
+  gx.fillStyle='#201c2a';gx.fillRect(0,82,W,2);
+  // rainy window, left
+  gx.fillStyle='#141420';gx.fillRect(16,16,54,44);
+  gx.fillStyle='#241f1c';gx.fillRect(14,14,58,2);gx.fillRect(14,60,58,2);
+  gx.fillRect(14,14,2,48);gx.fillRect(70,14,2,48);gx.fillRect(42,16,2,44);
+  let s=13;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647;};
+  gx.fillStyle='rgba(150,170,200,.4)';
+  for(let i=0;i<40;i++)gx.fillRect(16+rnd()*52|0,16+rnd()*42|0,1,2);
+  // the TV, glowing
+  gx.fillStyle='rgba(122,154,201,.10)';gx.fillRect(96,28,80,66);
+  gx.fillStyle='#2a2620';gx.fillRect(104,36,64,50);
+  gx.fillStyle='#2c3a58';gx.fillRect(107,39,58,44);
+  gx.fillStyle='rgba(160,180,210,.3)';
+  for(let i=0;i<120;i++)gx.fillRect(107+rnd()*58|0,39+rnd()*44|0,1,1);
+  gx.fillStyle='rgba(200,210,225,.55)';
+  gx.fillRect(131,46,10,7);gx.fillRect(133,53,7,28);           // blurry girl
+  gx.fillStyle='#2a2620';gx.fillRect(126,30,3,7);gx.fillRect(140,30,3,7);
+  // clock + yellow tag
+  gx.fillStyle='rgba(190,195,210,.5)';
+  gx.fillRect(84,8,1,5);gx.fillRect(88,8,4,1);gx.fillRect(88,12,4,1);gx.fillRect(88,8,1,5);gx.fillRect(91,8,1,5);
+  gx.fillStyle='#e8c832';gx.fillRect(0,0,3,H);
+  gx.fillStyle='rgba(0,0,0,.25)';gx.fillRect(0,0,W,3);gx.fillRect(0,H-3,W,3);
+})();
+
 /* ---- pod avatars ---- */
 function pod(id,body,dark){
   const g=document.getElementById(id).getContext('2d');
@@ -334,6 +381,14 @@ function pod(id,body,dark){
 }
 pod('av0','#8a857a','#54504c');
 pod('av1','#8a857a','#54504c');
+/* midnight channel avatar: a tiny glowing tv */
+(function(){
+  const gx=document.getElementById('av4').getContext('2d');
+  gx.fillStyle='#2a2620';gx.fillRect(1,4,12,9);
+  gx.fillStyle='#7a9ac9';gx.fillRect(3,6,8,5);
+  gx.fillStyle='rgba(220,230,240,.8)';gx.fillRect(6,7,2,3);
+  gx.fillStyle='#2a2620';gx.fillRect(4,1,1,3);gx.fillRect(9,1,1,3);
+})();
 /* grimoire weiss avatar: a floating book */
 (function(){
   const gx=document.getElementById('av3').getContext('2d');
@@ -355,7 +410,7 @@ pod('av1','#8a857a','#54504c');
 document.getElementById('sform').addEventListener('submit',e=>{
   e.preventDefault();
   const b=document.getElementById('sbox');
-  b.value='';b.placeholder='no results. this world has three videos.';
+  b.value='';b.placeholder='no results. this world has four videos.';
 });
 try{
   const n=+localStorage.getItem('nier16_views')||1;
@@ -364,6 +419,8 @@ try{
   document.getElementById('views2').textContent=m+(m===1?' view':' views');
   const k=+localStorage.getItem('kaine16_views')||1;
   document.getElementById('views3').textContent=k+(k===1?' view':' views');
+  const p=+localStorage.getItem('p416_views')||1;
+  document.getElementById('views4').textContent=p+(p===1?' view':' views');
 }catch(e){}
 </script>
 </body>
