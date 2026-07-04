@@ -33,7 +33,9 @@ alone at the far end of a walkway.
 A porch on the cliff edge at sunset — the one warm frame in the film. Kainé and
 Kali sit side by side, feet over the drop.
 > KALI: "You are my treasure. Live, Kainé."
-In the last seconds the sunset goes dark, and gold eyes open in the shadow.
+In the last seconds the sunset goes dark — and something vast and lizard-like
+hauls itself out of the chasm, jaw first, one eye glowing like a lantern.
+The giant Shade. The one that takes her grandmother.
 
 ### 3 · TYRANN (14s) — *lowpass, dropped notes, detune — the music sickens*
 Black. Kainé lies broken. Violet shade-static crawls up her left side; a huge

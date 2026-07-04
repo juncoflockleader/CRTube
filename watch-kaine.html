@@ -403,6 +403,41 @@ function drawShade(x,y,t,big){
   g.fillStyle='rgba(138,92,201,.4)';
   g.fillRect(x-6*s,y-14*s+wob,2,2); g.fillRect(x+5*s,y-12*s+wob,2,2);
 }
+function drawHook(bx,by,t,rise){        // the giant lizard shade, rising from the chasm
+  if(rise<=0)return;
+  const sway=Math.sin(t*1.1)*2;
+  g.fillStyle=C.shade;
+  // neck: segments climbing out of the dark, curving toward the porch
+  for(let i=0;i<12;i++){
+    const yy=(by-10-i*9*rise)|0;
+    const xx=(bx-9+Math.pow(i/11,2)*46+sway*(i/11))|0;
+    g.fillRect(xx,yy,(21-i*.6)|0,12);
+  }
+  const hx=(bx+37+sway)|0, hy=(by-10-11*9*rise)|0;
+  const jaw=rise>.85?((Math.sin(t*1.8)>0)?3:2):1;   // jaw drifts open, slowly
+  // skull, brow spines, long snout, lower jaw
+  g.fillRect(hx-6,hy-14,26,16);
+  for(let k=0;k<4;k++)g.fillRect(hx-4+k*6,hy-18+((k*3)&3),3,5);
+  g.fillRect(hx+18,hy-10,26,8);
+  g.fillRect(hx+16,hy+jaw,23,5);
+  // teeth
+  g.fillStyle=C.bone;
+  for(let k=0;k<5;k++)g.fillRect(hx+21+k*4,hy-3,1,2);
+  for(let k=0;k<4;k++)g.fillRect(hx+23+k*4,hy+jaw,1,1);
+  // lantern eye
+  g.fillStyle='rgba(232,192,105,.35)'; g.fillRect(hx+2,hy-11,7,6);
+  g.fillStyle=C.shadeEye; g.fillRect(hx+4,hy-10,4,3);
+  // foreclaw hauling over the chasm lip
+  g.fillStyle=C.shade;
+  g.fillRect(bx+26,by-72*rise|0,7,26);
+  for(let k=0;k<3;k++)g.fillRect(bx+24+k*4,(by-72*rise+24)|0,2,5);
+  // shade-wisps shedding off the neck
+  g.fillStyle='rgba(138,92,201,.45)';
+  for(let k=0;k<8;k++){
+    const wy=(by-20-k*11*rise+Math.sin(t*2+k)*3)|0;
+    g.fillRect((bx-6+((k*29)%38))|0,wy,1,1);
+  }
+}
 
 /* ================= SCENES ================= */
 let state='title', filmT=0, sceneIdx=-1, S_={};
@@ -462,10 +497,10 @@ const SCN=[
     R(160,140,7,4,C.hairK); R(159,144,8,7,'#8a8276');        // young kaine seated
     R(160,151,2,5,C.skin); R(164,151,2,5,C.skin);
     R(165,142,2,2,C.skin); R(166,139,2,2,C.tear);
-    // gold eyes open in the dark
-    if(dk>.6){ const n=(dk-.6)*10|0;
-      for(let k=0;k<Math.min(4,n);k++){
-        R(30+k*24,60+k*14,2,2,C.shadeEye); R(36+k*24,60+k*14,2,2,C.shadeEye);}
+    // "grandma" — the giant lizard shade hauls itself out of the chasm
+    if(dk>.3){
+      if(!S_.rumbled){ S_.rumbled=true; if(ac)noiseHit(ac.currentTime,.07,1.4,'lowpass',260); }
+      drawHook(56,214,st,clamp((dk-.3)/.65,0,1));
     }
     caption([
       [2.5,7,'"YOU ARE MY TREASURE."','KALI'],
