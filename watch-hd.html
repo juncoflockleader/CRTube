@@ -89,7 +89,7 @@ Y:[5,5,2,2,2],Z:[7,1,2,4,7],
 '5':[7,4,6,1,6],'6':[7,4,7,5,7],'7':[7,1,2,2,2],'8':[7,5,7,5,7],'9':[7,5,7,1,7],
 '.':[0,0,0,0,2],',':[0,0,0,2,4],':':[0,2,0,2,0],'!':[2,2,2,0,2],'?':[7,1,3,0,2],
 "'":[2,4,0,0,0],'-':[0,0,7,0,0],'·':[0,0,2,0,0],'"':[5,5,0,0,0],'/':[1,1,2,4,4],
-'[':[3,2,2,2,3],']':[6,2,2,2,6],
+'[':[3,2,2,2,3],']':[6,2,2,2,6],'*':[5,2,7,2,5],
 };
 function drawText(s,x,y,c,sc){
   sc=sc||1; g.fillStyle=c; s=(''+s).toUpperCase();
@@ -503,8 +503,8 @@ const SCN=[
       S_.flak=S_.flak.filter(f=>f.a<1.2);
       drawFlight(150,90+Math.sin(st*1.4)*10,st);
       drawFlight(110,120+Math.sin(st*1.4+1)*10,st+2);
-      caption([[1.5,5,"DESCENT: ABANDONED FACTORY."],
-        [6,9.5,"NO CONTACT FROM THE PREVIOUS SQUADRON."]],st);
+      caption([[1.5,5,'"THIS IS YORHA UNIT 2B. COMMENCING DESCENT."','2B'],
+        [6,9.5,'"NO RESPONSE FROM THE ADVANCE SQUADRON."','OPERATOR 6O']],st);
       return;
     }
     // phase 2: MARX on the catwalks
@@ -612,12 +612,12 @@ const SCN=[
       ring(240,180,bb*270,1,`rgba(247,244,234,.8)`);
     }
     caption([
-      [10.5,13,"CONTACT. GOLIATH-CLASS: MARX."],
-      [14.6,16.8,"SHE TOOK ITS ARM - AND 9S TOOK ITS CONTROLS."],
-      [18.5,21,"FOUR MORE SIGNALS. ALL GOLIATH-CLASS."],
-      [21.3,23.3,"TOO MANY. NO WAY OUT."],
-      [23.6,26,'"9S... IT\'S BEEN AN HONOR."','2B'],
-      [26.3,29.5,"BLACK BOX REACTION CONFIRMED. GLORY TO MANKIND."],
+      [10.5,13,'"ENEMY CONTACT! GOLIATH-CLASS!"','9S'],
+      [14.6,16.8,'"I\'VE GOT CONTROL OF THE ARM!"','9S'],
+      [18.5,21,'"ALERT: MULTIPLE GOLIATH-CLASS SIGNALS."','POD 042'],
+      [21.3,23.3,'"THERE\'S TOO MANY OF THEM..."','2B'],
+      [23.6,26,'"IT\'S BEEN AN HONOR, MA\'AM."','9S'],
+      [26.3,29.5,'"GLORY TO MANKIND."','2B AND 9S'],
     ],st);
   }},
 /* ---- 3 THE BUNKER ---- */
@@ -651,9 +651,9 @@ const SCN=[
     drawTwoB(300,232,0,'stand');
     draw9S(340,230,0,'stand');
     caption([
-      [2,6,"THE BUNKER. NEW BODIES. NO MEMORY OF THE BLAST."],
-      [7.5,11,'"2B. 9S. REDEPLOY TO THE SURFACE."','COMMANDER'],
-      [12,15,"GLORY TO MANKIND."],
+      [2,6,'"WELCOME BACK, 2B."','COMMANDER'],
+      [7.5,11,'"YOUR ORDERS: SUPPORT THE RESISTANCE ON THE SURFACE."','COMMANDER'],
+      [12,15,'"GLORY TO MANKIND."','COMMANDER'],
     ],st);
   }},
 /* ---- 4 CITY RUINS ---- */
@@ -690,10 +690,10 @@ const SCN=[
       g.fillStyle='rgba(232,150,60,.5)'; g.fillRect(cx2+20,204,14,16);
     }
     caption([
-      [2,6,"CITY RUINS - 11945 AD."],
-      [8,12,"THE WAR HAS LASTED FIVE THOUSAND YEARS."],
+      [2,6,'"REPORT: THIS REGION WAS ONCE A VAST CITY."','POD 042'],
+      [8,12,'"IT\'S KIND OF PRETTY, DON\'T YOU THINK?"','9S'],
       [14,17.5,'"2B! WAIT UP!"','9S'],
-      [22,26,"THE RESISTANCE CAMP. ANEMONE'S PEOPLE."],
+      [22,26,'"PROPOSAL: RENDEZVOUS AT THE RESISTANCE CAMP."','POD 042'],
     ],st);
   }},
 /* ---- 5 THE DESERT ---- */
@@ -744,11 +744,11 @@ const SCN=[
       for(let k=0;k<10;k++)g.fillRect(pile-16+(k*23)%32,222+(k%4)*2,4,2);
     }
     caption([
-      [2,6,"THE DESERT. THE MACHINES HERE WEAR MASKS."],
+      [2,6,'"THESE MACHINES... THEY\'RE WEARING MASKS?"','9S'],
       [6.5,9.5,'"BECOME AS GODS... BECOME AS GODS..."','THE MACHINES'],
-      [11,15,"THE PILE OF BODIES SAT UP. IT HAD A FACE."],
-      [16.5,20,"BULLETS PASSED THROUGH. IT LEARNED TO DODGE."],
-      [21.5,25,"A SECOND ONE PULLED IT UNDER THE SAND."],
+      [11,15,'"WHAT IS THAT THING?!"','9S'],
+      [16.5,20,'"OUR ATTACKS AREN\'T WORKING!"','9S'],
+      [21.5,25,'"IT\'S RETREATING... INTO THE SAND?"','9S'],
     ],st);
   }},
 /* ---- 6 AMUSEMENT PARK ---- */
@@ -811,10 +811,10 @@ const SCN=[
       g.fillRect(sx3-40,sy-70+fall*40,80,4);
     }
     caption([
-      [2,6,"THE AMUSEMENT PARK. THE MACHINES THREW CONFETTI."],
-      [8,12,"IN THE THEATER, SOMETHING WAS SINGING."],
-      [13,17,"SIMONE. SHE ATE HER SISTERS TO BE BEAUTIFUL."],
-      [20.5,24.5,"THE SONG ENDED. THE DOLLS WENT STILL."],
+      [2,6,'"THEY\'RE NOT... ATTACKING US?"','9S'],
+      [8,12,'"THAT SONG... IT\'S COMING FROM THE THEATER."','9S'],
+      [13,17,'"BEAUTIFUL... I MUST BECOME MORE BEAUTIFUL..."','SIMONE'],
+      [20.5,24.5,'"REPORT: HOSTILE UNIT SILENCED."','POD 042'],
     ],st);
   }},
 /* ---- 7 PASCAL'S VILLAGE ---- */
@@ -844,8 +844,8 @@ const SCN=[
     R(184,196,7,4,'#c9788a');                            // a tiny hat
     drawTwoB(120,222,st,'stand'); draw9S(96,220,st,'stand');
     caption([
-      [2,6,'"WE LOVE PEACE. PLEASE DO NOT BE ALARMED."','PASCAL'],
-      [7.5,12.5,"MACHINES THAT LEFT THE WAR. NOBODY TAUGHT THEM HOW."],
+      [2,6,'"WE HAVE NO INTENTION OF FIGHTING."','PASCAL'],
+      [7.5,12.5,'"THIS VILLAGE IS A PLACE OF PEACE."','PASCAL'],
     ],st);
   }},
 /* ---- 8 GOLIATH INVASION ---- */
@@ -886,9 +886,9 @@ const SCN=[
     S_.trac=S_.trac.filter(p=>p.x<W+10);
     if(Math.random()<.1)sfxShot();
     caption([
-      [2,6,"THE CITY CRACKED OPEN. GOLIATH-CLASS: ENGELS."],
-      [8,12,"A BUILDING THAT DECIDED TO WALK."],
-      [15.5,19,"THE ARM CAME DOWN LIKE A DEMOLITION."],
+      [2,6,'"ALERT: GOLIATH-CLASS SIGNAL IN THE CITY RUINS."','OPERATOR 6O'],
+      [8,12,'"IT\'S HUGE!"','9S'],
+      [15.5,19,'"TARGET THE ARM JOINTS!"','2B'],
       [20,23.5,'"WOOHOO! DID YOU SEE THAT?!" - "FOCUS, 9S."','9S / 2B'],
     ],st);
   }},
@@ -910,8 +910,8 @@ const SCN=[
         g.fillStyle='rgba(220,230,235,.25)';g.fillRect(wx|0,154+(i%10)*10,8,1);}
       drawTwoB(180,150,st,'stand'); draw9S(150,148,st,'stand');
       drawPod(210,110,st,false);
-      caption([[1.5,5,"THE FLOODED CITY."],
-        [6,9.5,"SOMETHING UNDER THE CRATER. DIVE."]],st);
+      caption([[1.5,5,'"REPORT: STRONG ENERGY READING BELOW THE CRATER."','POD 042'],
+        [6,9.5,'"WE\'RE GOING DOWN THERE, AREN\'T WE."','9S']],st);
       return;
     }
     // inside the alien ship
@@ -939,9 +939,9 @@ const SCN=[
     }
     drawTwoB(150,232,st,'stand'); draw9S(118,230,st,'stand');
     caption([
-      [11,14.5,"THE ALIENS: DEAD FOR CENTURIES. HUSKS."],
-      [15.5,19,"THE MACHINES KILLED THEIR OWN GODS."],
-      [19.5,21.8,'"WE ARE... BEYOND THEM NOW."','ADAM'],
+      [11,14.5,'"THE ALIENS... THEY\'RE ALL DEAD?"','9S'],
+      [15.5,19,'"THEY PERISHED CENTURIES AGO. BY OUR HAND."','ADAM'],
+      [19.5,21.8,'"WE ARE BEYOND THEM NOW."','ADAM'],
     ],st);
   }},
 /* ---- 10 FOREST KINGDOM ---- */
@@ -983,10 +983,10 @@ const SCN=[
     }
     drawTwoB(90,222,st,'stand'); draw9S(64,220,st,'stand');
     caption([
-      [1.5,5.5,"THE FOREST KINGDOM. KNIGHTS GUARDING A CRADLE."],
-      [6.2,8.4,"THEIR KING: AN INFANT, ASLEEP FOR CENTURIES."],
-      [9.5,13,"ONE WHITE CUT. SHE DIDN'T EVEN SLOW DOWN."],
-      [14,18,"ANDROID MODEL A2. WANTED FOR DESERTION."],
+      [1.5,5.5,'"THIS READING... THE MACHINES HAVE A KING?"','9S'],
+      [6.2,8.4,'"IT\'S... A NEWBORN?"','9S'],
+      [9.5,13,'"THE KING! SHE KILLED THE KING!"','9S'],
+      [14,18,'"WANTED ANDROID: DESIGNATION A2."','POD 042'],
     ],st);
   }},
 /* ---- 11 COPIED CITY ---- */
@@ -1028,11 +1028,11 @@ const SCN=[
       g.fillStyle='rgba(213,37,46,.5)'; g.fillRect(axx-2,ayy-22,6,8);
     }
     caption([
-      [1.5,5,"A CITY OF WHITE BOXES. A PHOTOCOPY OF US."],
-      [5.8,9.2,'"I HAVE READ EVERYTHING. FEEL NOTHING."','ADAM'],
-      [10,13.5,'"WHERE. IS. 9S."','2B'],
+      [1.5,5,'"WELCOME TO MY CITY. A COPY OF YOURS."','ADAM'],
+      [5.8,9.2,'"YOU WANT TO **** US, DON\'T YOU?"','ADAM'],
+      [10,13.5,'"WHERE IS 9S."','2B'],
       [15.5,18.5,'"SO THIS... IS DEATH."','ADAM'],
-      [19,21.5,"HE SMILED GOING DOWN."],
+      [19,21.5,'"UNIT 9S LOCATED. VITAL SIGNS STABLE."','POD 042'],
     ],st);
   }},
 /* ---- 12 EVE ---- */
@@ -1087,10 +1087,10 @@ const SCN=[
     }
     g.setTransform(1,0,0,1,0,0);
     caption([
-      [1.5,5,"EVE. GRIEF WITH NOWHERE TO GO."],
-      [6,9.5,'"YOU TOOK MY BROTHER."','EVE'],
-      [12,15,"THE LAST DUEL OF ROUTE A."],
-      [18,21,"THE VIRUS WAS ALREADY IN 9S."],
+      [1.5,5,'"MY BROTHER... YOU KILLED MY BROTHER!"','EVE'],
+      [6,9.5,'"I WILL DESTROY EVERYTHING!"','EVE'],
+      [12,15,'"THIS WORLD... MEANS NOTHING WITHOUT HIM!"','EVE'],
+      [18,21,'"ALERT: LOGIC VIRUS DETECTED IN UNIT 9S."','POD 042'],
       [21.5,25.5,'"IT ALWAYS... ENDS LIKE THIS."','2B'],
     ],st);
   }},

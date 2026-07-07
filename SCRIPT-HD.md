@@ -84,5 +84,8 @@ this time, to disobey. `A FUTURE IS NOT GIVEN TO YOU.` — fin —
 ## Notes
 - Hi-bit = 480×270 canvas, dithered sky gradients (checker transitions),
   characters at ~44px with 8–12 tone palettes, disc-built props and bosses.
+- All subtitles are in-world dialogue (characters, Pods, Operator 6O) — no
+  narrator. Lines are kept to brief iconic fragments; a few are close
+  reconstructions of the localization rather than verbatim.
 - All flash-like moments (black box detonation, lasers, Excalibur-class beams)
   are continuous ramps — photosensitivity rules hold at any resolution.
