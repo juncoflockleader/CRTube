@@ -25,6 +25,11 @@ A tiny fake video site hosting pixel-art tribute films, rendered live on a
   flooded city, forest kingdom, copied city, Eve — then the Ending E credits
   bullet-hell, at roughly five and a half minutes. Stage and boss order follows
   the published walkthroughs.
+- **NieR:Automata — PIXEL CINEMA · Route A + Ending E** ([watch-cine.html](watch-cine.html), script in [SCRIPT-CINE.md](SCRIPT-CINE.md))
+  The same story shot as a film instead of a game recording: letterboxed 2.39:1,
+  cuts between wides, silhouettes, and close-ups — 2B's face in the cold open,
+  Adam's eyes opening, a low-angle Marx, a single tear in the red light, and a
+  final shot with no blindfold. Theatrical subtitles set in the lower bar.
 
 ## How it works
 
